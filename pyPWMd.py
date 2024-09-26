@@ -103,9 +103,12 @@ class pypwm_server:
         node = '{}/{}{}'.format(self.sysbase, self.chipbase, chip)
         if path.exists(node + '/pwm' + str(timer)):
             return True
-        # Put in try:except
-        with open(node + '/export','w') as export:
-            export.write(str(timer))
+        try:
+            with open(node + '/export','w') as export:
+                export.write(str(timer))
+        except (FileNotFoundError, OSError) as e:
+            self._log('Cannot access {}/export :: {}'.format(node, repr(e)))
+            return False
         if not path.exists(node + '/pwm' + str(timer)):
             return False
         else:
@@ -115,9 +118,12 @@ class pypwm_server:
         node = '{}/{}{}'.format(self.sysbase, self.chipbase, chip)
         if not path.exists(node + '/pwm' + str(timer)):
             return True
-        # Put in try:except
-        with open(node + '/unexport','w') as unexport:
-            unexport.write(str(timer))
+        try:
+            with open(node + '/unexport','w') as unexport:
+                unexport.write(str(timer))
+        except (FileNotFoundError, OSError) as e:
+            self._log('Cannot access {}/unexport :: {}'.format(node, repr(e)))
+            return False
         if path.exists(node + '/pwm' + str(timer)):
             return False
         else:
