@@ -10,20 +10,12 @@ from glob import glob
 sock = '/run/pwm.sock'
 
 class pypwm_server:
-    '''Animates the I2C OLED display
-
-    Handles starting the display and then displays the desired information
-    screens according to user-defined 'frame' rate.
-    Screens are 'slid' into place to provide a pleasing animation effect
-    A screensaver can be invoked to blank or invert the display as the user wishes
+    '''
+        PWM node control daemon (server)
+        Needs root..
     '''
 
     def __init__(self, socket=sock, logfile=None):
-        '''
-            populates self.timers: {chip#:timers[]}
-            entries in timers{} can be None (unexported) or
-                [enabled(bool),invert(bool),freq(int),duty(int)]
-        '''
         self.socket = socket
         self.logfile = logfile
         self.sysbase  = '/sys/class/pwm'
