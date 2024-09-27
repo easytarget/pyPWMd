@@ -13,7 +13,6 @@ _sockowner = (1000,1000)  # UID/GID
 _sockperm = 0o770  # Note.. octal
 socket = _sockdir + '/pyPWMd.sock'
 
-
 class pypwm_server:
     '''
         PWM node control daemon (server)
@@ -38,7 +37,7 @@ class pypwm_server:
     def _log(self, string):
         data = '{} :: {}'.format(ctime(), string)
         if self._logfile is not None:
-            with open(self._logfile,'w') as f:
+            with open(self._logfile,'a') as f:
                 f.write(data + '\n')
         else:
             print(data)
@@ -173,9 +172,9 @@ class pypwm_server:
                     self._log("warning: could not set socket permissions: {}".format(e))
             while True:
                 with listener.accept() as conn:
-                    print(conn.recv())
+                    self._log('Recieved: ' + conn.recv())
                     conn.send(pwm)
-                    print('Sent: ' + pwm)
+                    self._log('Sent: ' + pwm)
                     pwm += 'Pwm'
 
 
@@ -183,9 +182,18 @@ if __name__ == "__main__":
     '''
       Init and run a server
     '''
-    logfile = None
-    if len(argv) > 1:
-        logfile = argv[1]
+    try:
+        l = argv.index('--logfile')
+    except ValueError:
+        logfile = None
+    else:
+        try:
+            logfile = argv[l + 1]
+        except:
+            print('You must supply a logfile after the --logfile option.')
+            exit(1)
+        argv.pop(l + 1)
+        argv.pop(l)
 
     # Ensure we have a socket directory in /run
     if not path.isdir(_sockdir):
