@@ -25,6 +25,7 @@ class pypwm_server:
         self._chipbase = 'pwmchip'
         self._polarities = ['normal', 'inversed']
 
+        self._log('\nServer init')
         self._log('Scanning for pwm timers')
         chips = self._chipscan()
         if len(chips) == 0:
@@ -35,10 +36,13 @@ class pypwm_server:
                 self._log('- {} with {} timers'.format(chip, chips[chip]))
 
     def _log(self, string):
-        data = '{} :: {}'.format(ctime(), string)
         if self._logfile is not None:
             with open(self._logfile,'a') as f:
-                f.write(data + '\n')
+                if string[0] == '\n':
+                    string = string[1:]
+                    f.write('\n')   # allows a break in the log
+                for line in string.split('\n'):
+                    f.write('{} :: {}\n'.format(ctime(), line))
         else:
             print(data)
 
