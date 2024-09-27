@@ -180,7 +180,13 @@ class pypwm_server:
                     conn.send(self._process(cmdline))
 
     def _process(self, cmdline):
-        return 'Okay'
+        try:
+            cmd, args = cmdline.strip().split(' ',1)
+        except:
+            cmd, args = cmdline.strip(), ""
+        if cmd == 'states':
+            return self.states()
+        return 'invalid command: {}({})'.format(cmd, args)
 
 
 if __name__ == "__main__":
@@ -212,6 +218,7 @@ if __name__ == "__main__":
     def runcommand(cmdline):
         '''
           Pass the the command to server
+          ? syntax to match python syntax : simple ?
         '''
         print('TODO: ' + str(cmdline))
 
@@ -240,5 +247,5 @@ if __name__ == "__main__":
     elif command in ['open', 'close', 'get', 'set', 'states']:
         runcommand(argv[1:])
     else:
-        print('I\'m sorry dave...')
+        print('Unknown command: {}'.format(command))
 
