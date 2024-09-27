@@ -15,17 +15,17 @@ class pypwm_server:
         Needs root..
     '''
 
-    def __init__(self, socket=sock, logfile=None):
+    def __init__(self, socket = sock, logfile = None):
         self.socket = socket
-        self.logfile = logfile
-        self.sysbase  = '/sys/class/pwm'
-        self.chipbase = 'pwmchip'
-        self.polarities = ['normal','inversed']
+        self._logfile = logfile
+        self._sysbase  = '/sys/class/pwm'
+        self._chipbase = 'pwmchip'
+        self._polarities = ['normal', 'inversed']
 
-        self._log('scanning for pwm timers')
+        self._log('Scanning for pwm timers')
         chips = self._chipscan()
         if len(chips) == 0:
-            self._log('No PWM devices available in {}!'.format(self.sysbase))
+            self._log('No PWM devices available in {}!'.format(self._sysbase))
         else:
             self._log('PWM devices:')
             for chip in chips.keys():
@@ -33,15 +33,15 @@ class pypwm_server:
 
     def _log(self, string):
         data = '{} :: {}'.format(ctime(), string)
-        if self.logfile is not None:
-            with open(self.logfile,'w') as logfile:
-                logfile.write(data + '\n')
+        if self._logfile is not None:
+            with open(self._logfile,'w') as f:
+                f.write(data + '\n')
         else:
             print(data)
 
     def _chipscan(self):
         #returns a dict with <path>:<number of pwms>
-        base = '{}/{}'.format(self.sysbase,self.chipbase)
+        base = '{}/{}'.format(self._sysbase,self._chipbase)
         chips = {}
         for chip in glob('{}*'.format(base)):
             with open(chip + '/npwm','r') as npwm:
@@ -56,14 +56,14 @@ class pypwm_server:
         with open(node + '/duty_cycle','r') as f:
            duty = int(f.read())
         with open(node + '/polarity','r') as f:
-           polarity = self.polarities.index(f.read().strip())
+           polarity = self._polarities.index(f.read().strip())
         return enable, period, duty, polarity
 
     def states(self):
         pwms = {}
         chips = self._chipscan()
         for chip in chips.keys():
-            c = chip[len(self.sysbase + self.chipbase)+1:]
+            c = chip[len(self._sysbase + self._chipbase)+1:]
             pwms[c] = {}
             for timer in range(chips[chip]):
                 node = '{}/pwm{}'.format(chip, timer)
@@ -75,47 +75,55 @@ class pypwm_server:
         return pwms
 
     def get(self, chip, timer):
-        node = '{}/{}{}/pwm{}'.format(self.sysbase,
-            self.chipbase, chip, timer)
+        node = '{}/{}{}/pwm{}'.format(self._sysbase,
+            self._chipbase, chip, timer)
         if not path.exists(node):
             return None
         return self._gettimer(node)
 
-    def set(self, chip, timer, enable=None, period=None, duty=None, polarity=None):
+    def set(self, chip, timer, enable=None, pwm=None, polarity=None):
+        # Set properties for a timer
+
         def setprop(n, p, v):
+            # Set an individual node+property with error trap.
             try:
-                with open(n + '/' + p, 'w') as export:
-                    export.write(str(v))
+                with open(n + '/' + p, 'w') as f:
+                    f.write(str(v))
             except (FileNotFoundError, OSError) as e:
                 self._log('Cannot set {}/{} :: {}'.format(n, p, repr(e)))
                 return False
             return True
 
-        node = '{}/{}{}/pwm{}'.format(self.sysbase, self.chipbase, chip, timer)
+        node = '{}/{}{}/pwm{}'.format(self._sysbase, self._chipbase, chip, timer)
         if not path.exists(node):
             self._log('error: attempt to set unexported timer {}'.format(node))
             return False
-        state = self._gettimer(node)
-        print(state)
-        if period is not None:
-            # min and max values?
-            # set duty to zero first?
-            if state[3] != period:
+        state = list(self._gettimer(node))
+        print('before' + str(state))  # debug
+        if pwm is not None:
+            period, duty = pwm
+            if duty > period:
+                self._log('error: cannot set duty:{} greater than period:{}'
+                    .format(duty, period))
+                return False
+            if state[1] != period:
+                if state[1] > 0:
+                    # if period already has a value, set duty=0 before it is changed
+                    setprop(node, 'duty_cycle', 0)
+                    state[2] = 0
                 setprop(node, 'period', period)
-        if duty is not None:
-            #duty = min(period,duty), use period from state if period is None
-            if state[3] != duty:
+            if state[2] != duty:
                 setprop(node, 'duty_cycle', duty)
         if polarity is not None:
             if state[3] != polarity:
-                setprop(node, 'polarity', self.polarities[polarity])
+                setprop(node, 'polarity', self._polarities[polarity])
         if enable is not None:
             if state[0] != enable:
                 setprop(node, 'enable', enable)
-        print(self._gettimer(node))
+        print('after' + str(self._gettimer(node)))  # debug
 
     def open(self, chip, timer):
-        node = '{}/{}{}'.format(self.sysbase, self.chipbase, chip)
+        node = '{}/{}{}'.format(self._sysbase, self._chipbase, chip)
         if path.exists(node + '/pwm' + str(timer)):
             return True
         try:
@@ -130,7 +138,7 @@ class pypwm_server:
             return True
 
     def close(self, chip, timer):
-        node = '{}/{}{}'.format(self.sysbase, self.chipbase, chip)
+        node = '{}/{}{}'.format(self._sysbase, self._chipbase, chip)
         if not path.exists(node + '/pwm' + str(timer)):
             return True
         try:
