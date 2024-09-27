@@ -48,15 +48,16 @@ class pypwm_server:
                 chips[chip] = int(npwm.read())
         return chips
 
+    def _getprop(self,n):
+        with open(n,'r') as f:
+           r = f.read().strip()
+        return r
+
     def _gettimer(self,node):
-        with open(node + '/enable','r') as f:
-           enable = int(f.read())
-        with open(node + '/period','r') as f:
-           period = int(f.read())
-        with open(node + '/duty_cycle','r') as f:
-           duty = int(f.read())
-        with open(node + '/polarity','r') as f:
-           polarity = self._polarities.index(f.read().strip())
+        enable = int(self._getprop(node + '/enable'))
+        period = int(self._getprop(node + '/period'))
+        duty = int(self._getprop(node + '/duty_cycle'))
+        polarity = self._polarities.index(self._getprop(node + '/polarity'))
         return enable, period, duty, polarity
 
     def states(self):
@@ -91,15 +92,12 @@ class pypwm_server:
                     f.write(str(v))
             except (FileNotFoundError, OSError) as e:
                 self._log('Cannot set {}/{} :: {}'.format(n, p, repr(e)))
-                return False
-            return True
 
         node = '{}/{}{}/pwm{}'.format(self._sysbase, self._chipbase, chip, timer)
         if not path.exists(node):
             self._log('error: attempt to set unexported timer {}'.format(node))
             return False
         state = list(self._gettimer(node))
-        print('before' + str(state))  # debug
         if pwm is not None:
             period, duty = pwm
             if duty > period:
@@ -120,7 +118,8 @@ class pypwm_server:
         if enable is not None:
             if state[0] != enable:
                 setprop(node, 'enable', enable)
-        print('after' + str(self._gettimer(node)))  # debug
+        self._log('set: {} = {} '.format(node, list(self._gettimer(node))))
+        return True
 
     def open(self, chip, timer):
         node = '{}/{}{}'.format(self._sysbase, self._chipbase, chip)
@@ -135,6 +134,7 @@ class pypwm_server:
         if not path.exists(node + '/pwm' + str(timer)):
             return False
         else:
+            self._log('opened: {}'.format(node))
             return True
 
     def close(self, chip, timer):
@@ -150,6 +150,7 @@ class pypwm_server:
         if path.exists(node + '/pwm' + str(timer)):
             return False
         else:
+            self._log('closed: {}'.format(node))
             return True
 
 if __name__ == "__main__":
