@@ -36,15 +36,15 @@ class pypwm_server:
                 self._log('- {} with {} timers'.format(chip, chips[chip]))
 
     def _log(self, string):
+        string += '\n'
+        out = '\n' if string[0] == '\n' else ''
+        for line in string.strip().split('\n'):
+            out += '{} :: {}'.format(ctime(), line)
         if self._logfile is not None:
             with open(self._logfile,'a') as f:
-                if string[0] == '\n':
-                    string = string[1:]
-                    f.write('\n')   # allows a break in the log
-                for line in string.split('\n'):
-                    f.write('{} :: {}\n'.format(ctime(), line))
+                f.write(out + '\n')
         else:
-            print(data)
+            print(out)
 
     def _chipscan(self):
         #returns a dict with <path>:<number of pwms>
@@ -161,7 +161,6 @@ class pypwm_server:
             return True
 
     def serve(self, socket, owner = None, perm = None):
-        pwm = 'Pwm'
         with Listener(socket) as listener:
             self._log('Listening on: ' + listener.address)
             if owner is not None:
@@ -176,16 +175,47 @@ class pypwm_server:
                     self._log("warning: could not set socket permissions: {}".format(e))
             while True:
                 with listener.accept() as conn:
-                    self._log('Recieved: ' + conn.recv())
-                    conn.send(pwm)
-                    self._log('Sent: ' + pwm)
-                    pwm += 'Pwm'
+                    cmdline = conn.recv()
+                    self._log('Recieved: ' + cmdline)  # debug
+                    conn.send(self._process(cmdline))
+
+    def _process(self, cmdline):
+        return 'Okay'
 
 
 if __name__ == "__main__":
-    '''
-      Init and run a server
-    '''
+    def runserver():
+        '''
+          Init and run a server
+        '''
+        # Ensure we have a socket directory in /run
+        if not path.isdir(_sockdir):
+            makedirs(_sockdir)
+        # Clean any existing socket (or error)
+        if path.exists(socket):
+            try:
+                remove(socket)
+            except Exception as e:
+                print('Socket {} already exists and cannot be removed.'.format(socket))
+                print(e)
+                print('Is another instance running?')
+                exit()
+
+        print('Starting Python PWM server')
+        if logfile is not None:
+            print('Logging to: {}'.format(logfile))
+
+        p = pypwm_server(logfile)
+        p.serve(socket, owner = _sockowner, perm = _sockperm)
+        print('Server Exited')
+
+    def runcommand(cmdline):
+        '''
+          Pass the the command to server
+        '''
+        print('TODO: ' + str(cmdline))
+
+    # Parse Arguments and take appropriate action
     try:
         l = argv.index('--logfile')
     except ValueError:
@@ -199,24 +229,16 @@ if __name__ == "__main__":
         argv.pop(l + 1)
         argv.pop(l)
 
-    # Ensure we have a socket directory in /run
-    if not path.isdir(_sockdir):
-        makedirs(_sockdir)
-    # Clean any existing socket (or error)
-    if path.exists(socket):
-        try:
-            remove(socket)
-        except Exception as e:
-            print('Socket {} already exists and cannot be removed.'.format(socket))
-            print(e)
-            print('Is another instance running?')
-            exit()
+    if len(argv) == 1:
+        print(argv[0] + ': requires a command (see docs)')
+        exit(1)
 
-    print('Starting Python PWM server')
-    if logfile is not None:
-        print('Logging to: {}'.format(logfile))
+    # Command is always first argument
+    command = argv[1]
+    if command == 'server':
+        runserver()
+    elif command in ['open', 'close', 'get', 'set', 'states']:
+        runcommand(argv[1:])
+    else:
+        print('I\'m sorry dave...')
 
-    p = pypwm_server(logfile)
-    print('Server Started')
-    p.serve(socket, owner = _sockowner, perm = _sockperm)
-    print('Server Exited')
