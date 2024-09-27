@@ -4,10 +4,15 @@
 
 from time import ctime
 from sys import argv
-from os import path
+from os import path, remove, makedirs, chown, chmod
 from glob import glob
+from multiprocessing.connection import Listener, Client
 
-sock = '/run/pwm.sock'
+_sockdir = '/run/pwm'
+_sockowner = (1000,1000)  # UID/GID
+_sockperm = 0o770  # Note.. octal
+socket = _sockdir + '/pyPWMd.sock'
+
 
 class pypwm_server:
     '''
@@ -15,8 +20,7 @@ class pypwm_server:
         Needs root..
     '''
 
-    def __init__(self, socket = sock, logfile = None):
-        self.socket = socket
+    def __init__(self, logfile = None):
         self._logfile = logfile
         self._sysbase  = '/sys/class/pwm'
         self._chipbase = 'pwmchip'
@@ -153,6 +157,28 @@ class pypwm_server:
             self._log('closed: {}'.format(node))
             return True
 
+    def serve(self, socket, owner = None, perm = None):
+        pwm = 'Pwm'
+        with Listener(socket) as listener:
+            self._log('Listening on: ' + listener.address)
+            if owner is not None:
+                try:
+                    chown(socket, *owner)
+                except Exception as e:
+                    self._log("warning: could not set socket owner: {}".format(e))
+            if perm is not None:
+                try:
+                    chmod(socket, perm)
+                except Exception as e:
+                    self._log("warning: could not set socket permissions: {}".format(e))
+            while True:
+                with listener.accept() as conn:
+                    print(conn.recv())
+                    conn.send(pwm)
+                    print('Sent: ' + pwm)
+                    pwm += 'Pwm'
+
+
 if __name__ == "__main__":
     '''
       Init and run a server
@@ -161,9 +187,24 @@ if __name__ == "__main__":
     if len(argv) > 1:
         logfile = argv[1]
 
+    # Ensure we have a socket directory in /run
+    if not path.isdir(_sockdir):
+        makedirs(_sockdir)
+    # Clean any existing socket (or error)
+    if path.exists(socket):
+        try:
+            remove(socket)
+        except Exception as e:
+            print('Socket {} already exists and cannot be removed.'.format(socket))
+            print(e)
+            print('Is another instance running?')
+            exit()
+
     print('Starting Python PWM server')
     if logfile is not None:
         print('Logging to: {}'.format(logfile))
 
-    p = pypwm_server(sock, logfile)
-    print(p.states())
+    p = pypwm_server(logfile)
+    print('Server Started')
+    p.serve(socket, owner = _sockowner, perm = _sockperm)
+    print('Server Exited')
