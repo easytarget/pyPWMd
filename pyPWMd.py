@@ -1,9 +1,10 @@
+#!/usr/bin/python3
 '''
   PWM server daemon
 '''
 
 from time import ctime
-from sys import argv
+from sys import argv, exit
 from os import path, remove, makedirs, chown, chmod
 from glob import glob
 from multiprocessing.connection import Listener, Client
@@ -12,6 +13,12 @@ _sockdir = '/run/pwm'
 _sockowner = (1000,1000)  # UID/GID
 _sockperm = 0o770  # Note.. octal
 socket = _sockdir + '/pyPWMd.sock'
+myname = path.basename(__file__)
+
+usage = '''{}:
+    A Help file..
+    ...would help!
+'''.format(myname).strip()
 
 class pypwm_server:
     '''
@@ -180,13 +187,11 @@ class pypwm_server:
                     conn.send(self._process(cmdline))
 
     def _process(self, cmdline):
-        try:
-            cmd, args = cmdline.strip().split(' ',1)
-        except:
-            cmd, args = cmdline.strip(), ""
-        if cmd == 'states':
-            return self.states()
-        return 'invalid command: {}({})'.format(cmd, args)
+        cmd = cmdline.strip().split(',')[0]
+        args = [] if len(cmdline) == 1 else cmdline[1:]
+        if cmd in ['states', 'open', 'close', 'set', 'get']:
+            return  exec(cmd + str(*args))
+        return '{} invalid command: {}, try \'help\''.format(self.__module__, cmd)
 
 
 if __name__ == "__main__":
@@ -205,7 +210,7 @@ if __name__ == "__main__":
                 print('Socket {} already exists and cannot be removed.'.format(socket))
                 print(e)
                 print('Is another instance running?')
-                exit()
+                exit(1)
 
         print('Starting Python PWM server')
         if logfile is not None:
@@ -220,7 +225,7 @@ if __name__ == "__main__":
           Pass the the command to server
           ? syntax to match python syntax : simple ?
         '''
-        print('TODO: ' + str(cmdline))
+        return 'TODO: {}'.format(cmdline), 0
 
     # Parse Arguments and take appropriate action
     try:
@@ -230,22 +235,25 @@ if __name__ == "__main__":
     else:
         try:
             logfile = argv[l + 1]
-        except:
-            print('You must supply a logfile after the --logfile option.')
-            exit(1)
+        except Exception:
+            print('{}: You must supply a filename for the --logfile option.'.format(myname))
+            exit(2)
         argv.pop(l + 1)
         argv.pop(l)
 
     if len(argv) == 1:
-        print(argv[0] + ': requires a command (see docs)')
-        exit(1)
+        print('{}: No command specified\n{}'.format(myname, usage))
+        exit(2)
 
     # Command is always first argument
     command = argv[1]
     if command == 'server':
         runserver()
-    elif command in ['open', 'close', 'get', 'set', 'states']:
-        runcommand(argv[1:])
+    elif command in ['h', 'help', 'Help', '-h', '--help', 'usage', 'info']:
+        print(usage)
     else:
-        print('Unknown command: {}'.format(command))
+        response, status = runcommand(argv[1:])
+        print(response)
+        exit(status)
+    exit(0)
 
