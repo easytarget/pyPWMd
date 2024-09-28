@@ -15,10 +15,52 @@ _sockperm = 0o770  # Note.. octal
 socket = _sockdir + '/pyPWMd.sock'
 myname = path.basename(__file__)
 
-usage = '''{}:
-    A Help file..
-    ...would help!
-'''.format(myname).strip()
+usage = '''Usage:
+    {} command <options>
+    where 'command' is one of:
+        server
+        states
+        open <chip> <timer>
+        close <chip> <timer>
+        set <chip> <timer> <enable=0|1> <pwm=(<period>,<duty_cycle>)> <polarity=0|1>
+        get <chip> <timer>
+
+    'server' starts a server on {}, and is typically run as root.
+    see the main documentation for more.
+
+    All other commands are sent to the server.
+
+    <chip> and <timer> are integers.
+    - PWM timers are organised by chip number, then timer number
+
+    'open' and 'close' export and unexport nodes.
+    - To access a timer's status and settings the timer node must first
+      be exported
+
+    'states' lists the available pwm chips, timers, and their status.
+    - If a node entry is unexported it is shown as 'None'
+    - Exported entries are a list of the parameters (see below) followed
+      by the timer's node path in the /sys tree
+
+    'get' returns no entry if the timer is not exported, otherwise it will
+    return four numeric values, these are (in sequence):
+    - enable(0|1)        : Run state, output is undefined when disabled(0)
+    - period(integer)    : Total period of pwm cycle (nanoseconds)
+    - duty_cycle(integer): Pulse time within each cycle (nanoseconds)
+    - polarity(0|1)      : Polarity (high/low) at start of pulse
+
+    'set' will change an exported nodes settings with the supplied values.
+    - Attempting to set the enable or polarity states will fail unless
+      a valid period (non zero) has been supplied or previously set
+    - The duty_cycle cannot exceed the period
+
+    Currently you can only supply the pwm 'value' in nanoseconds; ie: the
+    overall time for each pulse cycle, and the active time within that pulse.
+    - ToDo: provide helper functions to convert 'frequency/fraction' values
+      into 'period/duty_cycle' ones, anv vice-versa
+
+    Homepage: https://github.com/easytarget/pyPWMd
+'''.format(myname, socket).strip()
 
 class pypwm_server:
     '''
