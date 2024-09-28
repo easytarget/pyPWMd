@@ -8,6 +8,7 @@ from sys import argv, exit
 from os import path, remove, makedirs, chown, chmod
 from glob import glob
 from multiprocessing.connection import Listener, Client
+from json import dumps, loads
 
 _sockdir = '/run/pwm'
 _sockowner = (1000,1000)  # UID/GID
@@ -22,36 +23,42 @@ usage = '''Usage:
         states
         open <chip> <timer>
         close <chip> <timer>
-        set <chip> <timer> <enable=0|1> <pwm=(<period>,<duty_cycle>)> <polarity=0|1>
+        set <chip> <timer> <enable> <pwm> <polarity>
         get <chip> <timer>
 
-    'server' starts a server on {}, and is typically run as root.
-    see the main documentation for more.
+    'server' starts a server on {}.
+    - needs to run as root, see the main documentation for more.
 
-    All other commands are sent to the server.
+    All other commands are sent to the server, all arguments are mandatory
 
-    <chip> and <timer> are integers.
-    - PWM timers are organised by chip number, then timer number
+    <chip> and <timer> are integers
+        - PWM timers are organised by chip, then timer index on the chip
+    <enable> is a boolean, 0 or 1, output is undefined when disabled(0)
+    <pwm> has the form: (<period>,<duty_cycle>)
+        The values must be enclosed in brackets, seperated by a comma
+        - period(integer)     : Total period of pwm cycle (nanoseconds)
+        - duty_cycle(integer) : Pulse time within each cycle (nanoseconds)
+    <polarity> defines the initial state (high/low) at start of pulse
 
-    'open' and 'close' export and unexport nodes.
+    These are:
+
+    'open' and 'close' export and unexport timer nodes.
     - To access a timer's status and settings the timer node must first
       be exported
+    - Timers continue to run even when unexported
 
     'states' lists the available pwm chips, timers, and their status.
     - If a node entry is unexported it is shown as 'None'
     - Exported entries are a list of the parameters (see below) followed
       by the timer's node path in the /sys tree
 
-    'get' returns no entry if the timer is not exported, otherwise it will
+    'get' returns nothing if the timer is not exported, otherwise it will
     return four numeric values, these are (in sequence):
-    - enable(0|1)        : Run state, output is undefined when disabled(0)
-    - period(integer)    : Total period of pwm cycle (nanoseconds)
-    - duty_cycle(integer): Pulse time within each cycle (nanoseconds)
-    - polarity(0|1)      : Polarity (high/low) at start of pulse
 
     'set' will change an exported nodes settings with the supplied values.
+    - enable and polarity are boolean values, 0 or 1
     - Attempting to set the enable or polarity states will fail unless
-      a valid period (non zero) has been supplied or previously set
+      a valid period (non zero) is supplied or was previously set
     - The duty_cycle cannot exceed the period
 
     Currently you can only supply the pwm 'value' in nanoseconds; ie: the
@@ -90,8 +97,8 @@ class pypwm_server:
         for line in string.strip().split('\n'):
             out += '{} :: {}'.format(ctime(), line)
         if self._logfile is not None:
-            with open(self._logfile,'a') as f:
-                f.write(out + '\n')
+            with open(self._logfile,'a') as file:
+                file.write(out + '\n')
         else:
             print(out)
 
@@ -104,12 +111,12 @@ class pypwm_server:
                 chips[chip] = int(npwm.read())
         return chips
 
-    def _getprop(self,n):
-        with open(n,'r') as f:
-           r = f.read().strip()
-        return r
+    def _getprop(self, node):
+        with open(node, 'r') as file:
+           value = file.read().strip()
+        return value
 
-    def _gettimer(self,node):
+    def _gettimer(self, node):
         enable = int(self._getprop(node + '/enable'))
         period = int(self._getprop(node + '/period'))
         duty = int(self._getprop(node + '/duty_cycle'))
@@ -138,7 +145,8 @@ class pypwm_server:
             return None
         return self._gettimer(node)
 
-    def set(self, chip, timer, enable=None, pwm=None, polarity=None):
+    #def set(self, chip, timer, enable=None, pwm=None, polarity=None):
+    def set(self, chip, timer, enable, pwm, polarity):
         # Set properties for a timer
 
         def setprop(n, p, v):
@@ -209,7 +217,7 @@ class pypwm_server:
             self._log('closed: {}'.format(node))
             return True
 
-    def serve(self, socket, owner = None, perm = None):
+    def server(self, socket, owner = None, perm = None):
         with Listener(socket) as listener:
             self._log('Listening on: ' + listener.address)
             if owner is not None:
@@ -222,18 +230,41 @@ class pypwm_server:
                     chmod(socket, perm)
                 except Exception as e:
                     self._log("warning: could not set socket permissions: {}".format(e))
+            # Now loop forever listening and responding to socket
             while True:
-                with listener.accept() as conn:
-                    cmdline = conn.recv()
-                    self._log('Recieved: ' + cmdline)  # debug
-                    conn.send(self._process(cmdline))
+                self._listen(listener)
 
-    def _process(self, cmdline):
-        cmd = cmdline.strip().split(',')[0]
-        args = [] if len(cmdline) == 1 else cmdline[1:]
-        if cmd in ['states', 'open', 'close', 'set', 'get']:
-            return  exec(cmd + str(*args))
-        return '{} invalid command: {}, try \'help\''.format(self.__module__, cmd)
+    def _listen(self,listener):
+        with listener.accept() as conn:
+            json = conn.recv()
+            try:
+                recieved = loads(json)
+            except JSONDecodeError:
+                recieved = '{} (decode failed)'.format(json)
+            if type(recieved) != dict:
+                self._log('invalid data on socket: {}'.format(recieved))
+                conn.send('invalid : {}'.format(recieved))
+            elif 'cmd' not in recieved.keys():
+                self._log('no command in data on socket: {}'.format(recieved))
+                conn.send('no command : {}'.format(recieved))
+            else:
+                cmd = recieved['cmd']
+                self._log('Recieved: {}'.format(cmd))  # debug
+                conn.send(self._process(cmd))
+
+    def _process(self, cmd):
+        if cmd[0] not in ['states', 'open', 'close', 'set', 'get']:
+            return 'invalid command: {}, try \'help\''.format(cmd)
+        args = [] if len(cmd) == 1 else cmd[1:]
+        #for i in range(0,len(args)):
+        #    if type(args[i]) == str:
+        #        args[i] = args[i].replace(' ','')
+        print('{}({})'.format(cmd[0], ', '.join(map(str,args))))  # DEBUG
+        try:
+            ret = getattr(self, cmd[0])(*args)
+        except Exception as e:
+            ret = e
+        return ret
 
 
 if __name__ == "__main__":
@@ -259,7 +290,7 @@ if __name__ == "__main__":
             print('Logging to: {}'.format(logfile))
 
         p = pypwm_server(logfile)
-        p.serve(socket, owner = _sockowner, perm = _sockperm)
+        p.server(socket, owner = _sockowner, perm = _sockperm)
         print('Server Exited')
 
     def runcommand(cmdline):
@@ -267,8 +298,12 @@ if __name__ == "__main__":
           Pass the the command to server
           ? syntax to match python syntax : simple ?
         '''
-        return 'TODO: {}'.format(cmdline), 0
+        json = dumps({'cmd':cmdline})
+        return '{}'.format(json), 0
 
+    '''
+        Main Code
+    '''
     # Parse Arguments and take appropriate action
     try:
         l = argv.index('--logfile')
@@ -284,7 +319,7 @@ if __name__ == "__main__":
         argv.pop(l)
 
     if len(argv) == 1:
-        print('{}: No command specified\n{}'.format(myname, usage))
+        print('{}: No command specified, try: {} help'.format(myname, argv[0]))
         exit(2)
 
     # Command is always first argument
@@ -298,4 +333,3 @@ if __name__ == "__main__":
         print(response)
         exit(status)
     exit(0)
-
