@@ -1,5 +1,6 @@
 from pyPWMd import pypwm_client
 from time import sleep
+from sys import exit
 from atexit import register
 
 '''
@@ -16,7 +17,7 @@ from atexit import register
      the gpio pwm chip and timer respectively
 '''
 chip = 0
-timer = 7
+timer = 2
 
 # If we opened the timer, close it again on exit.
 def clean_exit():
@@ -24,6 +25,9 @@ def clean_exit():
 
 # Generate a client object
 pwm = pypwm_client()
+
+if pwm.connected == False:
+    exit()
 
 # Open the timer if necesscary, register a close event.
 if pwm.states()[str(chip)][timer] is None:

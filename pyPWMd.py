@@ -250,27 +250,37 @@ class pypwm_client:
 
     def __init__(self, sock = socket, verify = True):
         self._sock = sock
+        self.connected = False
         if verify:
-            if self.info()[0] == version:
-                print('info: using server running at {}'.format(self._sock))
-            else:
+            info = self.info()
+            if type(info) is not list:
+                print('warning: no server running at {}'.format(self._sock))
+            elif info[0] != version:
                 print('warning: version missmatch to server running at {}'.format(self._sock))
+                self.connected = True
+            else:
+                print('info: using server running at {}'.format(self._sock))
+                self.connected = True
 
     def _send(self, cmdline):
         if not path.exists(self._sock):
             print('{}: error: no server at {}'.format(name, self._sock))
+            self.connected = False
             return None
         try:
             with Client(self._sock, authkey=auth) as conn:
                 conn.send(cmdline)
-                return(conn.recv())
+                ret = conn.recv()
+                self.connected = True
+                return ret
         except Exception as e:
             print('{}: error taking to server at {}\n{}'
                 .format(name, self._sock, e))
+            self.connected = False
             return None
 
     def info(self):
-        return list(self._send('info'))
+        return self._send('info')
 
     def states(self):
         return self._send('states')
