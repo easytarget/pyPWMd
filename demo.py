@@ -27,6 +27,7 @@ def clean_exit():
 pwm = pypwm_client()
 
 if pwm.connected == False:
+    print('No PWM server, exiting..')
     exit()
 
 # Open the timer if necesscary, register a close event.
@@ -42,4 +43,4 @@ while True:
     power = round(min(max(power + step, 0),1),3)
     step = -step if power in [0,1] else step
     print('{}'.format('.' if power != 0 else '.\n'), end='', flush=True)
-    sleep(0.5)
+    #sleep(0.5)
