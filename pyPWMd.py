@@ -10,14 +10,19 @@ from glob import glob
 from multiprocessing.connection import Listener, Client
 from json import dumps, loads
 
+# Some housekeeping
 name = path.basename(__file__)
-version = '0.0.1'
+version = '0.1'
 
+# Define the socket
 _sockdir = '/run/pwm'
 _sockowner = (1000,1000)  # UID/GID
 _sockperm = 0o770  # Note.. octal
 socket = _sockdir + '/pyPWMd.sock'
 auth = bytes(version.encode('utf-8'))
+
+# pwm API specifies nanoseconds as the base period unit.
+basefreq = 1000000000
 
 class pypwm_server:
     '''
@@ -167,6 +172,20 @@ class pypwm_server:
             self._log('closed: {}/pwm{}'.format(node, timer))
             return True
 
+    def f2p(self, freq, power):
+        # convert a frequency(Hz) and power(fraction) to
+        #  a period and duty_cycle in nanoseconds
+        period = int(basefreq / freq)
+        duty = int(period * power)
+        return period, duty
+
+    def p2f(self, period, duty):
+        # convert a period and duty_cycle in nanoseconds to
+        #  a frequency(Hz) and power(fraction)
+        freq = round(basefreq / period, 3)
+        power = round(duty / period, 3)
+        return freq, power
+
     def server(self, sock=socket, owner=None, perm=None):
         with Listener(sock, authkey=auth) as listener:
             self._log('Listening on: ' + listener.address)
@@ -185,35 +204,42 @@ class pypwm_server:
                 self._listen(listener)
 
     def _listen(self,listener):
-        with listener.accept() as conn:
-            try:
-                recieved = conn.recv()
-            except EOFError:
-                recieved = ''
-                self._log('warning: null connection on socket: {}'.format(recieved))
-                return   # empty connection, ignore
-            cmdline = recieved.strip().split(' ')
-            #self._log('Recieved: {}'.format(cmdline))  # debug
-            conn.send(self._process(cmdline))
+        try:
+            with listener.accept() as conn:
+                try:
+                    recieved = conn.recv()
+                except EOFError:
+                    recieved = ''
+                    self._log('warning: null connection on socket: {}'.format(recieved))
+                    return   # empty connection, ignore
+                cmdline = recieved.strip().split(' ')
+                #self._log('Recieved: {}'.format(cmdline))  # debug
+                conn.send(self._process(cmdline))
+        except Exception as e:
+            self._log('warning: error on socket\n{}'.format(e))
 
     def _process(self, cmdline):
         cmdset = {'info':0, 'states':0, 'open':2, 'close':2,
                     'get':2, 'set':6, 'f2p':2, 'p2f':2}
+        floatsok = ['f2p', 'p2f']
         cmd = cmdline[0]
         args = [] if len(cmdline) == 1 else cmdline[1:]
         #print('{}({})'.format(cmd, '' if len(args) == 0 else ', '.join(args)))  # DEBUG
         for i in range(len(args)):
             try:
-                args[i] = int(args[i])
+                if cmd in floatsok:
+                    args[i] = float(args[i])
+                else:
+                    args[i] = int(args[i])
             except:
-                self._log('error: non integer argument: {}'.format(cmdline))
-                return 'error: non integer argument: {}'.format(cmdline)
+                self._log('error: incorrect argument \'{}\' for \'{}\''.format(args[i], cmd))
+                return 'error: imcorrect argument: \'{}\' for \'{}\''.format(args[i], cmd)
         if cmd not in cmdset.keys():
-            self._log('error: unknown command: {}'.format(cmdline))
-            return 'error: unknown command: {}'.format(cmdline)
+            self._log('error: unknown command \'{}\''.format(cmd))
+            return 'error: unknown command \'{}\''.format(cmd)
         if len(args) != cmdset[cmd]:
-            self._log('error: incorrect argument count: {}'.format(cmdline))
-            return 'error: incorrect argument count: {}'.format(cmdline)
+            self._log('error: incorrect argument count {} for \'{}\''.format(len(cmdline),cmd))
+            return 'error: incorrect argument count {} for \'{}\''.format(len(cmdline), cmd)
         return getattr(self,cmd)(*args)
 
 class pypwm_client:
@@ -221,14 +247,26 @@ class pypwm_client:
         PWM node control client
     '''
 
-    def __init__(self, sock = socket):
+    def __init__(self, sock = socket, verify = True):
         self._sock = sock
+        if verify:
+            if self.info()[1] == version:
+                print('info: using server running at {}'.format(self._sock))
+            else:
+                print('warning: version missmatch to server running at {}'.format(self._sock))
 
     def _send(self, cmdline):
-        # put in a try:except wrapper
-        with Client(self._sock, authkey=auth) as conn:
-            conn.send(cmdline)
-            return(conn.recv())
+        if not path.exists(self._sock):
+            print('{}: error: no server at {}'.format(name, self._sock))
+            return None
+        try:
+            with Client(self._sock, authkey=auth) as conn:
+                conn.send(cmdline)
+                return(conn.recv())
+        except Exception as e:
+            print('{}: error taking to server at {}\n{}'
+                .format(name, self._sock, e))
+            return None
 
     def info(self):
         return list(self._send('info'))
@@ -249,10 +287,19 @@ class pypwm_client:
         if pwm is None:
             period = duty = None
         else:
-            period, duty = pwm
+            try:
+                period, duty = pwm
+            except Exception as e:
+                print('error: pwm tuple ({}) is incorrect: {}'.format(pwm, e))
+                return None
         return self._send('set {} {} {} {} {} {}'
             .format(chip, timer, enable, period, duty, polarity))
 
+    def f2p(self, freq, power):
+        return self._send('f2p {} {}'.format(freq, power))
+
+    def p2f(self, period, duty):
+        return self._send('p2f {} {}'.format(period, duty))
 
 if __name__ == "__main__":
 
