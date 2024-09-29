@@ -19,6 +19,7 @@ _sockdir = '/run/pwm'
 _sockowner = (1000,1000)  # UID/GID
 _sockperm = 0o770  # Note.. octal
 socket = _sockdir + '/pyPWMd.sock'
+# By default use version string as auth token, prevents API fails.
 auth = bytes(version.encode('utf-8'))
 
 # pwm API specifies nanoseconds as the base period unit.
@@ -250,7 +251,7 @@ class pypwm_client:
     def __init__(self, sock = socket, verify = True):
         self._sock = sock
         if verify:
-            if self.info()[1] == version:
+            if self.info()[0] == version:
                 print('info: using server running at {}'.format(self._sock))
             else:
                 print('warning: version missmatch to server running at {}'.format(self._sock))
