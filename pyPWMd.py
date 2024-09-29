@@ -5,67 +5,19 @@
 
 from time import ctime
 from sys import argv, exit
-from os import path, remove, makedirs, chown, chmod
+from os import path, remove, makedirs, chown, chmod, getuid, getgid, getpid
 from glob import glob
 from multiprocessing.connection import Listener, Client
 from json import dumps, loads
+
+name = path.basename(__file__)
+version = '0.0.1'
 
 _sockdir = '/run/pwm'
 _sockowner = (1000,1000)  # UID/GID
 _sockperm = 0o770  # Note.. octal
 socket = _sockdir + '/pyPWMd.sock'
-myname = path.basename(__file__)
-
-usage = '''Usage:
-    {} command <options>
-    where 'command' is one of:
-        server
-        states
-        open <chip> <timer>
-        close <chip> <timer>
-        set <chip> <timer> <enable> <period> <duty_cycle> <polarity>
-        get <chip> <timer>
-
-    'server' starts a server on {}.
-    - needs to run as root, see the main documentation for more.
-
-    All other commands are sent to the server, all arguments are mandatory
-
-    <chip> and <timer> are integers
-        - PWM timers are organised by chip, then timer index on the chip
-    <enable> is a boolean, 0 or 1, output is undefined when disabled(0)
-    <period> is an integer, the total period of pwm cycle (nanoseconds)
-    <duty_cycle> is an integer, the pulse time within each cycle (nanoseconds)
-    <polarity> defines the initial state (high/low) at start of pulse
-
-    These are:
-
-    'open' and 'close' export and unexport timer nodes.
-    - To access a timer's status and settings the timer node must first
-      be exported
-    - Timers continue to run even when unexported
-
-    'states' lists the available pwm chips, timers, and their status.
-    - If a node entry is unexported it is shown as 'None'
-    - Exported entries are a list of the parameters (see below) followed
-      by the timer's node path in the /sys tree
-
-    'get' returns nothing if the timer is not exported, otherwise it will
-    return four numeric values, these are (in sequence):
-
-    'set' will change an exported nodes settings with the supplied values.
-    - enable and polarity are boolean values, 0 or 1
-    - Attempting to set the enable or polarity states will fail unless
-      a valid period (non zero) is supplied or was previously set
-    - The duty_cycle cannot exceed the period
-
-    Currently you can only supply the pwm 'value' in nanoseconds; ie: the
-    overall time for each pulse cycle, and the active time within that pulse.
-    - ToDo: provide helper functions to convert 'frequency/fraction' values
-      into 'period/duty_cycle' ones, anv vice-versa
-
-    Homepage: https://github.com/easytarget/pyPWMd
-'''.format(myname, socket).strip()
+auth = bytes(version.encode('utf-8'))
 
 class pypwm_server:
     '''
@@ -73,7 +25,7 @@ class pypwm_server:
         Needs root..
     '''
 
-    def __init__(self, logfile = None):
+    def __init__(self, logfile=None):
         self._logfile = logfile
         self._sysbase  = '/sys/class/pwm'
         self._chipbase = 'pwmchip'
@@ -120,6 +72,9 @@ class pypwm_server:
         duty = int(self._getprop(node + '/duty_cycle'))
         polarity = self._polarities.index(self._getprop(node + '/polarity'))
         return enable, period, duty, polarity
+
+    def info(self):
+        return [version, getpid(), getuid(), getgid(), self._sysbase]
 
     def states(self):
         pwms = {}
@@ -212,8 +167,8 @@ class pypwm_server:
             self._log('closed: {}/pwm{}'.format(node, timer))
             return True
 
-    def server(self, sock=socket, owner = None, perm = None):
-        with Listener(sock) as listener:
+    def server(self, sock=socket, owner=None, perm=None):
+        with Listener(sock, authkey=auth) as listener:
             self._log('Listening on: ' + listener.address)
             if owner is not None:
                 try:
@@ -242,7 +197,8 @@ class pypwm_server:
             conn.send(self._process(cmdline))
 
     def _process(self, cmdline):
-        cmdset = {'states':0, 'open':2, 'close':2, 'get':2, 'set':6, 'f2p':2, 'p2f':2}
+        cmdset = {'info':0, 'states':0, 'open':2, 'close':2,
+                    'get':2, 'set':6, 'f2p':2, 'p2f':2}
         cmd = cmdline[0]
         args = [] if len(cmdline) == 1 else cmdline[1:]
         #print('{}({})'.format(cmd, '' if len(args) == 0 else ', '.join(args)))  # DEBUG
@@ -265,45 +221,106 @@ class pypwm_client:
         PWM node control client
     '''
 
-    def __init__(self, sock = socket, verbose = True):
+    def __init__(self, sock = socket):
         self._sock = sock
-        self._verbose = verbose
-        if self._verbose:
-            print('pyPWMd client will use socket: {}'.format(self._sock))
 
     def _send(self, cmdline):
-        with Client(self._sock) as conn:
-            print('SEND: ', cmdline)
+        # put in a try:except wrapper
+        with Client(self._sock, authkey=auth) as conn:
             conn.send(cmdline)
-            print(conn.recv())
+            return(conn.recv())
+
+    def info(self):
+        return list(self._send('info'))
 
     def states(self):
         return self._send('states')
 
     def open(self, chip, timer):
-        pass
+        return self._send('open {} {}'.format(chip, timer))
 
     def close(self, chip, timer):
-        pass
+        return self._send('close {} {}'.format(chip, timer))
 
     def get(self, chip, timer):
-        pass
+        return self._send('get {} {}'.format(chip, timer))
 
     def set(self, chip, timer, enable=None, pwm=None, polarity=None):
         if pwm is None:
             period = duty = None
         else:
             period, duty = pwm
+        return self._send('set {} {} {} {} {} {}'
+            .format(chip, timer, enable, period, duty, polarity))
 
 
 if __name__ == "__main__":
+
+    usage = '''Usage:
+    {} command <options>
+    where 'command' is one of:
+        server
+        states
+        open <chip> <timer>
+        close <chip> <timer>
+        set <chip> <timer> <enable> <period> <duty_cycle> <polarity>
+        get <chip> <timer>
+
+    'server' starts a server on {}.
+    - needs to run as root, see the main documentation for more.
+
+    All other commands are sent to the server, all arguments are mandatory
+
+    <chip> and <timer> are integers
+        - PWM timers are organised by chip, then timer index on the chip
+    <enable> is a boolean, 0 or 1, output is undefined when disabled(0)
+    <period> is an integer, the total period of pwm cycle (nanoseconds)
+    <duty_cycle> is an integer, the pulse time within each cycle (nanoseconds)
+    <polarity> defines the initial state (high/low) at start of pulse
+
+    These are:
+
+    'open' and 'close' export and unexport timer nodes.
+    - To access a timer's status and settings the timer node must first
+      be exported
+    - Timers continue to run even when unexported
+
+    'states' lists the available pwm chips, timers, and their status.
+    - If a node entry is unexported it is shown as 'None'
+    - Exported entries are a list of the parameters (see below) followed
+      by the timer's node path in the /sys tree
+
+    'get' returns nothing if the timer is not exported, otherwise it will
+    return four numeric values, these are (in sequence):
+
+    'set' will change an exported nodes settings with the supplied values.
+    - enable and polarity are boolean values, 0 or 1
+    - Attempting to set the enable or polarity states will fail unless
+      a valid period (non zero) is supplied or was previously set
+    - The duty_cycle cannot exceed the period
+
+    Currently you can only supply the pwm 'value' in nanoseconds; ie: the
+    overall time for each pulse cycle, and the active time within that pulse.
+    - ToDo: provide helper functions to convert 'frequency/fraction' values
+      into 'period/duty_cycle' ones, anv vice-versa
+
+    Homepage: https://github.com/easytarget/pyPWMd
+    '''.format(name, socket).strip()
+
     def runserver():
         '''
           Init and run a server,
         '''
         # Ensure we have a socket directory in /run
         if not path.isdir(_sockdir):
-            makedirs(_sockdir)
+            try:
+                makedirs(_sockdir)
+            except Exception as e:
+                print('Cannot create socket directory: {}.'.format(_sockdir))
+                print(e)
+                print('Running as uid:gid {}:{}'.format(getuid(),getgid()))
+                exit(1)
+
         # Clean any existing socket (or error)
         if path.exists(socket):
             try:
@@ -319,14 +336,14 @@ if __name__ == "__main__":
             print('Logging to: {}'.format(logfile))
 
         p = pypwm_server(logfile)
-        p.server(owner = _sockowner, perm = _sockperm)
+        p.server(owner=_sockowner, perm=_sockperm)
         print('Server Exited')
 
     def runcommand(cmdline):
         '''
           Pass the the command to server
         '''
-        with Client(socket) as conn:
+        with Client(socket, authkey=auth) as conn:
             conn.send(' '.join(cmdline))
             # timeout here.. ?
             reply = conn.recv()
@@ -351,20 +368,20 @@ if __name__ == "__main__":
         try:
             logfile = argv[l + 1]
         except Exception:
-            print('{}: You must supply a filename for the --logfile option.'.format(myname))
+            print('{}: You must supply a filename for the --logfile option.'.format(name))
             exit(2)
         argv.pop(l + 1)
         argv.pop(l)
 
     if len(argv) == 1:
-        print('{}: No command specified, try: {} help'.format(myname, argv[0]))
+        print('{}: No command specified, try: {} help'.format(name, argv[0]))
         exit(2)
 
     # Command is always first argument
     command = argv[1]
     if command == 'server':
         runserver()
-    elif command in ['h', 'help', 'Help', '-h', '--help', 'usage', 'info']:
+    elif command in ['h', 'help', 'Help', '-h', '--help', 'usage']:
         print(usage)
     else:
         response, status = runcommand(argv[1:])
