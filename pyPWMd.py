@@ -23,7 +23,7 @@ usage = '''Usage:
         states
         open <chip> <timer>
         close <chip> <timer>
-        set <chip> <timer> <enable> <pwm> <polarity>
+        set <chip> <timer> <enable> <period> <duty_cycle> <polarity>
         get <chip> <timer>
 
     'server' starts a server on {}.
@@ -34,10 +34,8 @@ usage = '''Usage:
     <chip> and <timer> are integers
         - PWM timers are organised by chip, then timer index on the chip
     <enable> is a boolean, 0 or 1, output is undefined when disabled(0)
-    <pwm> has the form: (<period>,<duty_cycle>)
-        The values must be enclosed in brackets, seperated by a comma
-        - period(integer)     : Total period of pwm cycle (nanoseconds)
-        - duty_cycle(integer) : Pulse time within each cycle (nanoseconds)
+    <period> is an integer, the total period of pwm cycle (nanoseconds)
+    <duty_cycle> is an integer, the pulse time within each cycle (nanoseconds)
     <polarity> defines the initial state (high/low) at start of pulse
 
     These are:
@@ -145,8 +143,7 @@ class pypwm_server:
             return None
         return self._gettimer(node)
 
-    #def set(self, chip, timer, enable=None, pwm=None, polarity=None):
-    def set(self, chip, timer, enable, pwm, polarity):
+    def set(self, chip, timer, enable, period, duty, polarity):
         # Set properties for a timer
 
         def setprop(n, p, v):
@@ -160,14 +157,12 @@ class pypwm_server:
         node = '{}/{}{}/pwm{}'.format(self._sysbase, self._chipbase, chip, timer)
         if not path.exists(node):
             self._log('error: attempt to set unexported timer {}'.format(node))
-            return False
+            return 'error: attempt to set unexported timer {}'.format(node)
         state = list(self._gettimer(node))
-        if pwm is not None:
-            period, duty = pwm
+        if period is not None:
             if duty > period:
-                self._log('error: cannot set duty:{} greater than period:{}'
-                    .format(duty, period))
-                return False
+                self._log('error: cannot set duty={} greater than period={}'.format(duty, period))
+                return 'error: cannot set duty={} greater than period={}'.format(duty, period)
             if state[1] != period:
                 if state[1] > 0:
                     # if period already has a value, set duty=0 before it is changed
@@ -194,11 +189,11 @@ class pypwm_server:
                 export.write(str(timer))
         except (FileNotFoundError, OSError) as e:
             self._log('Cannot access {}/export :: {}'.format(node, repr(e)))
-            return False
+            return 'Cannot access {}/export :: {}'.format(node, repr(e))
         if not path.exists(node + '/pwm' + str(timer)):
-            return False
+            return 'Failed to create {}/pwm'.format(node)
         else:
-            self._log('opened: {}'.format(node))
+            self._log('opened: {}/pwm{}'.format(node, timer))
             return True
 
     def close(self, chip, timer):
@@ -210,24 +205,24 @@ class pypwm_server:
                 unexport.write(str(timer))
         except (FileNotFoundError, OSError) as e:
             self._log('Cannot access {}/unexport :: {}'.format(node, repr(e)))
-            return False
+            return 'Cannot access {}/unexport :: {}'.format(node, repr(e))
         if path.exists(node + '/pwm' + str(timer)):
-            return False
+            return 'Failed to destroy {}/pwm'.format(node)
         else:
-            self._log('closed: {}'.format(node))
+            self._log('closed: {}/pwm{}'.format(node, timer))
             return True
 
-    def server(self, socket, owner = None, perm = None):
-        with Listener(socket) as listener:
+    def server(self, sock=socket, owner = None, perm = None):
+        with Listener(sock) as listener:
             self._log('Listening on: ' + listener.address)
             if owner is not None:
                 try:
-                    chown(socket, *owner)
+                    chown(sock, *owner)
                 except Exception as e:
                     self._log("warning: could not set socket owner: {}".format(e))
             if perm is not None:
                 try:
-                    chmod(socket, perm)
+                    chmod(sock, perm)
                 except Exception as e:
                     self._log("warning: could not set socket permissions: {}".format(e))
             # Now loop forever listening and responding to socket
@@ -236,41 +231,75 @@ class pypwm_server:
 
     def _listen(self,listener):
         with listener.accept() as conn:
-            json = conn.recv()
             try:
-                recieved = loads(json)
-            except JSONDecodeError:
-                recieved = '{} (decode failed)'.format(json)
-            if type(recieved) != dict:
-                self._log('invalid data on socket: {}'.format(recieved))
-                conn.send('invalid : {}'.format(recieved))
-            elif 'cmd' not in recieved.keys():
-                self._log('no command in data on socket: {}'.format(recieved))
-                conn.send('no command : {}'.format(recieved))
-            else:
-                cmd = recieved['cmd']
-                self._log('Recieved: {}'.format(cmd))  # debug
-                conn.send(self._process(cmd))
+                recieved = conn.recv()
+            except EOFError:
+                recieved = ''
+                self._log('warning: null connection on socket: {}'.format(recieved))
+                return   # empty connection, ignore
+            cmdline = recieved.strip().split(' ')
+            #self._log('Recieved: {}'.format(cmdline))  # debug
+            conn.send(self._process(cmdline))
 
-    def _process(self, cmd):
-        if cmd[0] not in ['states', 'open', 'close', 'set', 'get']:
-            return 'invalid command: {}, try \'help\''.format(cmd)
-        args = [] if len(cmd) == 1 else cmd[1:]
-        #for i in range(0,len(args)):
-        #    if type(args[i]) == str:
-        #        args[i] = args[i].replace(' ','')
-        print('{}({})'.format(cmd[0], ', '.join(map(str,args))))  # DEBUG
-        try:
-            ret = getattr(self, cmd[0])(*args)
-        except Exception as e:
-            ret = e
-        return ret
+    def _process(self, cmdline):
+        cmdset = {'states':0, 'open':2, 'close':2, 'get':2, 'set':6, 'f2p':2, 'p2f':2}
+        cmd = cmdline[0]
+        args = [] if len(cmdline) == 1 else cmdline[1:]
+        #print('{}({})'.format(cmd, '' if len(args) == 0 else ', '.join(args)))  # DEBUG
+        for i in range(len(args)):
+            try:
+                args[i] = int(args[i])
+            except:
+                self._log('error: non integer argument: {}'.format(cmdline))
+                return 'error: non integer argument: {}'.format(cmdline)
+        if cmd not in cmdset.keys():
+            self._log('error: unknown command: {}'.format(cmdline))
+            return 'error: unknown command: {}'.format(cmdline)
+        if len(args) != cmdset[cmd]:
+            self._log('error: incorrect argument count: {}'.format(cmdline))
+            return 'error: incorrect argument count: {}'.format(cmdline)
+        return getattr(self,cmd)(*args)
+
+class pypwm_client:
+    '''
+        PWM node control client
+    '''
+
+    def __init__(self, sock = socket, verbose = True):
+        self._sock = sock
+        self._verbose = verbose
+        if self._verbose:
+            print('pyPWMd client will use socket: {}'.format(self._sock))
+
+    def _send(self, cmdline):
+        with Client(self._sock) as conn:
+            print('SEND: ', cmdline)
+            conn.send(cmdline)
+            print(conn.recv())
+
+    def states(self):
+        return self._send('states')
+
+    def open(self, chip, timer):
+        pass
+
+    def close(self, chip, timer):
+        pass
+
+    def get(self, chip, timer):
+        pass
+
+    def set(self, chip, timer, enable=None, pwm=None, polarity=None):
+        if pwm is None:
+            period = duty = None
+        else:
+            period, duty = pwm
 
 
 if __name__ == "__main__":
     def runserver():
         '''
-          Init and run a server
+          Init and run a server,
         '''
         # Ensure we have a socket directory in /run
         if not path.isdir(_sockdir):
@@ -290,16 +319,25 @@ if __name__ == "__main__":
             print('Logging to: {}'.format(logfile))
 
         p = pypwm_server(logfile)
-        p.server(socket, owner = _sockowner, perm = _sockperm)
+        p.server(owner = _sockowner, perm = _sockperm)
         print('Server Exited')
 
     def runcommand(cmdline):
         '''
           Pass the the command to server
-          ? syntax to match python syntax : simple ?
         '''
-        json = dumps({'cmd':cmdline})
-        return '{}'.format(json), 0
+        with Client(socket) as conn:
+            conn.send(' '.join(cmdline))
+            # timeout here.. ?
+            reply = conn.recv()
+        if reply is None:
+            state = 1
+            reply = ''
+        elif type(reply) == str and 'error' in reply.lower():
+            state = 1
+        else:
+            state = 0
+        return reply, state
 
     '''
         Main Code
@@ -330,6 +368,7 @@ if __name__ == "__main__":
         print(usage)
     else:
         response, status = runcommand(argv[1:])
-        print(response)
+        if response != True:
+            print(response)
         exit(status)
     exit(0)
