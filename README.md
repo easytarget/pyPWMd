@@ -34,9 +34,45 @@ Clone this repo to a folder:
 - A recent and updated linux distro
 - Timers enabled and mapped to a gpio pin
 
-### Use
+## Use
 
-#### daemon (server) process
+The PWM timers are arranged by chip number, then timer number.
+
+By default timers do not have a control node open, before you can read or write timer properties the node must be opened (eg created at `/sys/class/pwm/pwmchip<chip#>/pwm<timer#>`). When control is no longer needed the node can be closed again.
+
+Once a node is open you can read and set it's properties; for each timer there are four (integer) values:
+* **enable** : Enable/disable the PWM signal (read/write).
+  * 0 = disabled, 1 - enabled
+* **period** : The total period of the PWM signal (read/write).
+  * Value is in nanoseconds and is the sum of the active and inactive time of the PWM.
+* **duty_cycle** : The active time of the PWM signal (read/write).
+  * Value is in nanoseconds and must be less than or equal to the period.
+* **polarity** : Changes the polarity of the PWM signal (read/write).
+  * Value is the string “normal” or “inversed”.
+
+The pyPWMd server is a front-end to the (legacy) sysFS interface; the kernel.org PWM API describes this in more detail:
+https://www.kernel.org/doc/html/latest/driver-api/pwm.html#using-pwms-with-the-sysfs-interface
+
+There are five basic commands provided by the clients;
+* `open <chip> <timer>`
+* `close <chip> <timer>`
+  * Open and Close timer nodes
+* `get <chip> <timer>`
+  * Gets the timer properties
+* `set <chip> <timer> <enable> <period> <duty_cycle> <polarity>`
+  * Sets the properties of the timer
+  * Note that *enable* and *polarity* cannot be set unless the *period* is valid (non-zero)
+* `states`
+  * Lists the *open*/*closed* state of all available PWM timers, if a timer is open it's properties are returned
+
+Additionally they have some helpers
+* `f2p` and `p2f`
+  * Converts a *frequency* & *power* (pwm ratio) pair of values to *period* and *duty_cycle*
+  * And vice versa.
+* `info`
+  * Returns the version, pid, uid, gid and sysfs root path of the server
+
+### daemon (server) process
 ```console
 ~/pyPWMd $ sudo ./pyPWMd.py server
 Starting Python PWM server v0.1
@@ -53,7 +89,7 @@ This needs to be run as root, in the background. There are many ways of doing th
 - When testing I tend to run it in a detached [`screen`](https://www.gnu.org/software/screen/manual/screen.html) session, so I can reattach and see logs/errors as needed.
 - TODO: document how to run as a systemd service; in principle easy but I'd like to set access via a `pwm` group as part of this.
 
-##### a little note on security
+#### A little note on security..
 The daemon process runs as the root user, and is written by 'some bloke on the internet' in python. Be sure you trust it before using it..
 - You can look at the code, of course. It only reads/writes to files in the /sys/class/pwm folder.
 - Python is considered quite secure, and this tool only uses libraries from the python standard library (no random libraries from PiPy etc..)
@@ -96,6 +132,8 @@ Mon Sep 30 12:13:12 2024 :: set: /sys/class/pwm/pwmchip0/pwm1 = [1, 10000, 5000,
 ~/pyPWMd $ kill 5994
 [1]+  Terminated              sudo ./pyPWMd.py server
 ```
+Run `pyPWMd.py help` to see the full command set and syntax.
+
 ## Python client
 ToDo
 
@@ -104,7 +142,7 @@ ToDo
 ## Commandline:
 ```
 Usage: v0.1
-    pyPWMd.py command <options>
+    pyPWMd.py command <options>  [--quiet]|[--verbose]
     where 'command' is one of:
         server
         states
@@ -145,14 +183,16 @@ Usage: v0.1
     - Attempting to set the enable or polarity states will fail unless
       a valid period (non zero) is supplied or was previously set
     - The duty_cycle cannot exceed the period
+    - Set operations are logged to the console, but not to disk logfiles
 
     Currently you can only supply the pwm 'value' in nanoseconds; ie: the
     overall time for each pulse cycle, and the active time within that pulse.
     - ToDo: provide helper functions to convert 'frequency/fraction' values
       into 'period/duty_cycle' ones, anv vice-versa
 
-    The --logfile option supresses the console log and sends it to the named
-    file instead. --verbose, enables logging of 'set' events.
+    Options (only apply to server):
+    --quiet supresses the console log (overrides --verbose)
+    --verbose enables logging of 'set' events
 ```
 
 ## Python lib
