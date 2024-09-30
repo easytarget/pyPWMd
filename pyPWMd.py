@@ -90,11 +90,7 @@ class pypwm_server:
             pwms[c] = {}
             for timer in range(chips[chip]):
                 node = '{}/pwm{}'.format(chip, timer)
-                if path.exists(node):
-                    pwms[c][timer] = list(self._gettimer(node))
-                    pwms[c][timer].append(node)
-                else:
-                    pwms[c][timer] = None
+                pwms[c][timer] = self._gettimer(node) if path.exists(node) else None
         return pwms
 
     def get(self, chip, timer):
@@ -102,7 +98,7 @@ class pypwm_server:
             self._chipbase, chip, timer)
         if not path.exists(node):
             return None
-        return self._gettimer(node)
+        return tuple(self._gettimer(node))
 
     def set(self, chip, timer, enable, period, duty, polarity):
         # Set properties for a timer
@@ -283,11 +279,23 @@ class pypwm_client:
             self.connected = False
             return None
 
+    def _pwmify(self, timer):
+        p = timer[1]
+        d = timer[2]
+        return (timer[0], (p, d), timer[3])
+
     def info(self):
         return self._send('info')
 
     def states(self):
-        return self._send('states')
+        states = self._send('states')
+        if type(states) != dict:
+            return states
+        for chip in states.keys():
+            for timer in states[chip].keys():
+                if states[chip][timer] is not None:
+                    states[chip][timer] = self._pwmify(states[chip][timer])
+        return states
 
     def open(self, chip, timer):
         return self._send('open {} {}'.format(chip, timer))
@@ -296,7 +304,10 @@ class pypwm_client:
         return self._send('close {} {}'.format(chip, timer))
 
     def get(self, chip, timer):
-        return self._send('get {} {}'.format(chip, timer))
+        ret = self._send('get {} {}'.format(chip, timer))
+        if type(ret) == tuple:
+            ret = self._pwmify(ret)
+        return ret
 
     def set(self, chip, timer, enable=None, pwm=None, polarity=None):
         if pwm is None:
