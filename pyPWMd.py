@@ -323,8 +323,8 @@ class pypwm_client:
 
 if __name__ == "__main__":
 
-    usage = '''Usage: v{}
-    {} command <options>  [--logfile file]
+    usage = '''Usage: v{0}
+    {1} command <options>  [--logfile file]
     where 'command' is one of:
         server
         states
@@ -333,9 +333,8 @@ if __name__ == "__main__":
         set <chip> <timer> <enable> <period> <duty_cycle> <polarity>
         get <chip> <timer>
 
-    'server' starts a server on {}.
+    'server' starts a server on {2}.
     - needs to run as root, see the main documentation for more.
-    - logfile is optional
 
     All other commands are sent to the server, all arguments are mandatory
 
@@ -408,28 +407,6 @@ if __name__ == "__main__":
         p.server(owner=_sockowner, perm=_sockperm)
         print('Server Exited')
 
-    def stopserver():
-        '''
-          Query the server for it's PID and then kill that
-        '''
-        with Client(socket, authkey=auth) as conn:
-            conn.send('info')
-            # timeout here.. ?
-            reply = conn.recv()
-        if type(reply) is not list:
-            print('error: failed to stop server, bad response to info query')
-            return 1
-        elif len(reply) != 5:
-            print('error: failed to stop server, info data corrupt')
-            return 1
-        else:
-            try:
-                kill(reply[1], SIGSTOP)
-            except Exception as e:
-                print('error: failed to stop server, process did not exit\n{}'.format(e))
-                return 1
-        return 0
-
     def runcommand(cmdline):
         '''
           Pass the the command to server
@@ -472,8 +449,6 @@ if __name__ == "__main__":
     command = argv[1]
     if command == 'server':
         runserver()
-    elif command == 'stopserver':
-        exit(stopserver())
     elif command in ['h', 'help', 'Help', '-h', '--help', 'usage']:
         print(usage)
     else:
