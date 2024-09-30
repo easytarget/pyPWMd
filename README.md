@@ -2,7 +2,7 @@
 
 PWM control in linux is provided by a generic API which is implemented in pwm drivers by device manufacturers. The Device Tree and pinctl are then used to enable PWM timers and map them onto GPIO pins.
 
-The **PWM Timers** are then controlled [via the API](https://www.kernel.org/doc/html/latest/driver-api/pwm.html), and the `/sys/class/pwm` tree.
+The PWM Timers are then controlled [via the API](https://www.kernel.org/doc/html/latest/driver-api/pwm.html), and the `/sys/class/pwm` tree.
 - Individual GPIO pins are muxed (mapped) to the timers, this is done via device tree overlays.
   - Generally there is a limited set of mappings available.
 
@@ -18,7 +18,7 @@ There is not (yet) a good generic solution for allowing non-root users to access
 
 ## A Python based approach to providing Userland control of PWM timers in linux.
 
-**pyPWMd** is a tool that can run a daemon process as root, which controlls the timers via the `/sys/class/pwm` tree and provides a simple socket based interface to the timers.
+**pyPWMd** is a tool that can run a daemon process as root, which controls the timers via the `/sys/class/pwm` tree and provides a simple socket based interface to the timers.
 
 It also provides two clients for the daemon; a commandline interface and a python class.
 
@@ -29,7 +29,7 @@ $ git clone https://github.com/easytarget/pyPWMd.git
 ...
 $ cd pyPWMd
 ```
-#### Requirements
+### Requirements
 - python3 (3.7+)
 - A recent and updated linux distro
 - Timers enabled and mapped to a gpio pin
@@ -48,7 +48,7 @@ Once a node is open you can read and set it's properties; for each timer there a
 * **duty_cycle** : The active time of the PWM signal (read/write).
   * Value is in nanoseconds and must be less than or equal to the period.
 * **polarity** : Changes the polarity of the PWM signal (read/write).
-  * Value is a integer. 0 for “normal” or 1 for “inversed”.
+  * Value is an integer. 0 for “normal” or 1 for “inversed”.
 
 The pyPWMd server is a front-end to the (legacy) sysFS interface; the kernel.org PWM API describes this in more detail:
 https://www.kernel.org/doc/html/latest/driver-api/pwm.html#using-pwms-with-the-sysfs-interface
@@ -100,7 +100,7 @@ This is a standard python [multiprocessing comms socket](https://docs.python.org
 ### Commandline client
 The *pyPWMd.py* script can be run on the commandline to set and read the timers.
 
-Here is a simple example: see also the shell demo [client-demo.**sh**](./client-demo.sh).
+Here is a simple example: see also the shell demo [client-demo.sh](./client-demo.sh).
 ```console
 $ sudo ./pyPWMd.py server --verbose &
 [1] 5994
@@ -175,7 +175,7 @@ Properties:
 pypwm_client.connected
       A bool, giving the last known client-server connection status
 ```
-Here is an example of using the library: see also the demo [client-demo.**py**](./client-demo.py).
+Here is an example of using the library: see also the demo [client-demo.py](./client-demo.py).
 For example:
 ```python
 Python 3.12.3 (main, Sep 11 2024, 14:17:37) [GCC 13.2.0] on linux
