@@ -32,16 +32,14 @@ class pypwm_server:
         Needs root..
     '''
 
-    def __init__(self, logfile=None, logfull=None):
+    def __init__(self, logfile=None, verbose=False):
         self._logfile = logfile
+        self.verbose = verbose
         self._sysbase  = '/sys/class/pwm'
         self._chipbase = 'pwmchip'
         self._polarities = ['normal', 'inversed']
-        if logfull is None:   #log verbosity
-            self._logfull = True if logfile is None else False
-        else:
-            self._logfull = logfull
-        self._log('\nServer init')
+
+        self._log('\nServer v{} init'.format(version))
         self._log('Scanning for pwm timers')
         chips = self._chipscan()
         if len(chips) == 0:
@@ -143,8 +141,8 @@ class pypwm_server:
         if enable is not None:
             if state[0] != enable:
                 setprop(node, 'enable', enable)
-        # do not log to disk (fills disk..)
-        if self._logfull:
+        # do not log to disk unless requested (fills disk and causes extra load)
+        if self.verbose:
             self._log('set: {} = {} '.format(node, list(self._gettimer(node))))
         return True
 
@@ -266,6 +264,7 @@ class pypwm_client:
             elif info[0] != version:
                 self._print('{}: warning: version missmatch to server running at {}'
                     .format(i__name__, self._sock))
+
     def _print(self, msg):
         if self.verbose:
             print(msg)
@@ -324,7 +323,7 @@ class pypwm_client:
 if __name__ == "__main__":
 
     usage = '''Usage: v{0}
-    {1} command <options>  [--logfile file]
+    {1} command <options>  [--logfile file] [--verbose]
     where 'command' is one of:
         server
         states
@@ -372,6 +371,9 @@ if __name__ == "__main__":
     - ToDo: provide helper functions to convert 'frequency/fraction' values
       into 'period/duty_cycle' ones, anv vice-versa
 
+    The --logfile option supresses the console log and sends it to the named
+    file instead. --verbose, enables logging of 'set' events.
+
     Homepage: https://github.com/easytarget/pyPWMd
     '''.format(version, name, socket).strip()
 
@@ -403,7 +405,7 @@ if __name__ == "__main__":
         if logfile is not None:
             print('Logging to: {}'.format(logfile))
 
-        p = pypwm_server(logfile)
+        p = pypwm_server(logfile, verbose)
         p.server(owner=_sockowner, perm=_sockperm)
         print('Server Exited')
 
@@ -439,6 +441,14 @@ if __name__ == "__main__":
             print('{}: You must supply a filename for the --logfile option.'.format(name))
             exit(2)
         argv.pop(l + 1)
+        argv.pop(l)
+
+    try:
+        l = argv.index('--verbose')
+    except ValueError:
+        verbose = False
+    else:
+        verbose = True
         argv.pop(l)
 
     if len(argv) == 1:

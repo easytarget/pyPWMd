@@ -68,7 +68,7 @@ The *pyPWMd.py* script can be run on the commandline to set and read the timers.
 Here is a simple example: see also the shell demo [client-demo.**sh**](./client-demo.sh) and the output from `pyPWMd.py help` (see below).
 
 ```console
-~/pyPWMd $ sudo ./pyPWMd.py server &
+~/pyPWMd $ sudo ./pyPWMd.py server --verbose &
 [1] 5994
 ~/pyPWMd $ Starting Python PWM server v0.1
 
@@ -150,6 +150,9 @@ Usage: v0.1
     overall time for each pulse cycle, and the active time within that pulse.
     - ToDo: provide helper functions to convert 'frequency/fraction' values
       into 'period/duty_cycle' ones, anv vice-versa
+
+    The --logfile option supresses the console log and sends it to the named
+    file instead. --verbose, enables logging of 'set' events.
 ```
 
 ## Python lib
