@@ -18,6 +18,40 @@ There is not (yet) a good generic solution for allowing non-root users to access
 
 ## A Python based approach to providing Userland control of PWM timers in linux.
 
+**pyPWMd** is a tool that can run a daemon process as root, which controlls the timers via the `/sys/class/pwm` tree and provides a simple socket based interface to the timers.
+
+It also provides two clients for the daemon; a commandline interface and a python class.
+
+### Install
+Clone this repo to a folder:
+```console
+~ $ git clone https://github.com/easytarget/pyPWMd.git
+...
+~ $ cd pyPWMd
+```
+#### Requirements
+- python3 (3.7+)
+- A recent and updated linux distro
+- Timers enabled and mapped to a gpio pin
+
+### Use
+
+#### daemon (server) process
+This needs to be run as root, in the background. There are many ways of doing this:
+- In the example below I simply background the daemon process
+  - TODO: see if I can make the process background itself? research needed.
+- When testing I tend to run it in a detached [`screen`](https://www.gnu.org/software/screen/manual/screen.html) session, so I can reattach and see logs/errors as needed.
+- TODO: document how to run as a systemd service; in principle easy but I'd like to set access via a `pwm` group as part of this.
+
+##### a little note on security
+The daemon process runs as the root user, and is written by 'some bloke on the internet' in python. Be sure you trust it before using it..
+- You can look at the code, of course. It only reads/writes to files in the /sys/class/pwm folder.
+- Python is considered quite secure, and this tool only uses libraries from the python standard library (no random libraries from PiPy etc..)
+- There is a simple authentication mechanism on the socket, the athentication key can be changed from the default to provide access control.
+- By default a unix filesystem socket is used, permissions can be set on this to allow access via groups.
+
+This is a standard python [multiprocessing comms socket](https://docs.python.org/3/library/multiprocessing.html#module-multiprocessing.connection), you can change the socket definition and allow access via the network, be careful doing this..
+
 WIP.. Here is a simple example: see also the shell and python demos.
 
 ```console
