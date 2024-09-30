@@ -314,7 +314,7 @@ class pypwm_client:
 
 if __name__ == "__main__":
 
-    usage = '''Usage:
+    usage = '''Usage: v{}
     {} command <options>
     where 'command' is one of:
         server
@@ -363,7 +363,7 @@ if __name__ == "__main__":
       into 'period/duty_cycle' ones, anv vice-versa
 
     Homepage: https://github.com/easytarget/pyPWMd
-    '''.format(name, socket).strip()
+    '''.format(version, name, socket).strip()
 
     def runserver():
         '''
@@ -389,7 +389,7 @@ if __name__ == "__main__":
                 print('Is another instance running?')
                 exit(1)
 
-        print('Starting Python PWM server')
+        print('Starting Python PWM server v{}'.format(version))
         if logfile is not None:
             print('Logging to: {}'.format(logfile))
 

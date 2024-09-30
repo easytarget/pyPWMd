@@ -37,6 +37,16 @@ Clone this repo to a folder:
 ### Use
 
 #### daemon (server) process
+```console
+~/pyPWMd $ sudo ./pyPWMd.py server
+Starting Python PWM server v0.1
+
+Mon Sep 30 12:09:43 2024 :: Server init
+Mon Sep 30 12:09:43 2024 :: Scanning for pwm timers
+Mon Sep 30 12:09:43 2024 :: PWM devices:
+Mon Sep 30 12:09:43 2024 :: - /sys/class/pwm/pwmchip0 with 2 timers
+Mon Sep 30 12:09:43 2024 :: Listening on: /run/pwm/pyPWMd.sock
+```
 This needs to be run as root, in the background. There are many ways of doing this:
 - In the example below I simply background the daemon process
   - TODO: see if I can make the process background itself? research needed.
@@ -52,12 +62,15 @@ The daemon process runs as the root user, and is written by 'some bloke on the i
 
 This is a standard python [multiprocessing comms socket](https://docs.python.org/3/library/multiprocessing.html#module-multiprocessing.connection), you can change the socket definition and allow access via the network, be careful doing this..
 
-WIP.. Here is a simple example: see also the shell and python demos.
+### Commandline client
+The *pyPWMd.py* script can be run on the commandline to set and read the timers.
+
+Here is a simple example: see also the shell demo [client-demo.**sh**](./client-demo.sh) and the output from `pyPWMd.py help` (see below).
 
 ```console
 ~/pyPWMd $ sudo ./pyPWMd.py server &
 [1] 5994
-~/pyPWMd $ Starting Python PWM server
+~/pyPWMd $ Starting Python PWM server v0.1
 
 Mon Sep 30 12:09:43 2024 :: Server init
 Mon Sep 30 12:09:43 2024 :: Scanning for pwm timers
@@ -83,3 +96,61 @@ Mon Sep 30 12:13:12 2024 :: set: /sys/class/pwm/pwmchip0/pwm1 = [1, 10000, 5000,
 ~/pyPWMd $ kill 5994
 [1]+  Terminated              sudo ./pyPWMd.py server
 ```
+## Python client
+ToDo
+
+# Reference
+
+## Commandline:
+```
+Usage: v0.1
+    pyPWMd.py command <options>
+    where 'command' is one of:
+        server
+        states
+        open <chip> <timer>
+        close <chip> <timer>
+        set <chip> <timer> <enable> <period> <duty_cycle> <polarity>
+        get <chip> <timer>
+
+    'server' starts a server on /run/pwm/pyPWMd.sock.
+    - needs to run as root, see the main documentation for more.
+
+    All other commands are sent to the server, all arguments are mandatory
+
+    <chip> and <timer> are integers
+        - PWM timers are organised by chip, then timer index on the chip
+    <enable> is a boolean, 0 or 1, output is undefined when disabled(0)
+    <period> is an integer, the total period of pwm cycle (nanoseconds)
+    <duty_cycle> is an integer, the pulse time within each cycle (nanoseconds)
+    <polarity> defines the initial state (high/low) at start of pulse
+
+    These are:
+
+    'open' and 'close' export and unexport timer nodes.
+    - To access a timer's status and settings the timer node must first
+      be exported
+    - Timers continue to run even when unexported
+
+    'states' lists the available pwm chips, timers, and their status.
+    - If a node entry is unexported it is shown as 'None'
+    - Exported entries are a list of the parameters (see below) followed
+      by the timer's node path in the /sys tree
+
+    'get' returns nothing if the timer is not exported, otherwise it will
+    return four numeric values, these are (in sequence):
+
+    'set' will change an exported nodes settings with the supplied values.
+    - enable and polarity are boolean values, 0 or 1
+    - Attempting to set the enable or polarity states will fail unless
+      a valid period (non zero) is supplied or was previously set
+    - The duty_cycle cannot exceed the period
+
+    Currently you can only supply the pwm 'value' in nanoseconds; ie: the
+    overall time for each pulse cycle, and the active time within that pulse.
+    - ToDo: provide helper functions to convert 'frequency/fraction' values
+      into 'period/duty_cycle' ones, anv vice-versa
+```
+
+## Python lib
+ToDo
