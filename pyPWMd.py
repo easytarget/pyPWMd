@@ -5,7 +5,8 @@
 
 from time import ctime
 from sys import argv, exit
-from os import path, remove, makedirs, chown, chmod, getuid, getgid, getpid
+from os import path, remove, makedirs, chown, chmod, getuid, getgid, getpid, kill
+from signal import SIGSTOP
 from glob import glob
 from multiprocessing.connection import Listener, Client
 from json import dumps, loads
@@ -31,12 +32,15 @@ class pypwm_server:
         Needs root..
     '''
 
-    def __init__(self, logfile=None):
+    def __init__(self, logfile=None, logfull=None):
         self._logfile = logfile
         self._sysbase  = '/sys/class/pwm'
         self._chipbase = 'pwmchip'
         self._polarities = ['normal', 'inversed']
-
+        if logfull is None:   #log verbosity
+            self._logfull = True if logfile is None else False
+        else:
+            self._logfull = logfull
         self._log('\nServer init')
         self._log('Scanning for pwm timers')
         chips = self._chipscan()
@@ -80,6 +84,7 @@ class pypwm_server:
         return enable, period, duty, polarity
 
     def info(self):
+        self._log('client sent info request')
         return [version, getpid(), getuid(), getgid(), self._sysbase]
 
     def states(self):
@@ -138,7 +143,9 @@ class pypwm_server:
         if enable is not None:
             if state[0] != enable:
                 setprop(node, 'enable', enable)
-        self._log('set: {} = {} '.format(node, list(self._gettimer(node))))
+        # do not log to disk (fills disk..)
+        if self._logfull:
+            self._log('set: {} = {} '.format(node, list(self._gettimer(node))))
         return True
 
     def open(self, chip, timer):
@@ -248,23 +255,24 @@ class pypwm_client:
         PWM node control client
     '''
 
-    def __init__(self, sock = socket, verify = True):
+    def __init__(self, sock=socket, verify=True, verbose=False):
         self._sock = sock
-        self.connected = False
+        self.verbose = verbose
+        self.connected = True
         if verify:
             info = self.info()
-            if type(info) is not list:
-                print('warning: no server running at {}'.format(self._sock))
+            if info is None:
+                self.connected = False
             elif info[0] != version:
-                print('warning: version missmatch to server running at {}'.format(self._sock))
-                self.connected = True
-            else:
-                print('info: using server running at {}'.format(self._sock))
-                self.connected = True
+                self._print('{}: warning: version missmatch to server running at {}'
+                    .format(i__name__, self._sock))
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)
 
     def _send(self, cmdline):
         if not path.exists(self._sock):
-            print('{}: error: no server at {}'.format(name, self._sock))
+            self._print('{}: error: no server at {}'.format(__name__, self._sock))
             self.connected = False
             return None
         try:
@@ -274,8 +282,8 @@ class pypwm_client:
                 self.connected = True
                 return ret
         except Exception as e:
-            print('{}: error taking to server at {}\n{}'
-                .format(name, self._sock, e))
+            self._print('{}: error taking to server at {}\n{}'
+                .format(__name__, self._sock, e))
             self.connected = False
             return None
 
@@ -301,7 +309,8 @@ class pypwm_client:
             try:
                 period, duty = pwm
             except Exception as e:
-                print('error: pwm tuple ({}) is incorrect: {}'.format(pwm, e))
+                self._print('{}: error: pwm tuple ({}) is incorrect: {}'
+                    .format(__name__, pwm, e))
                 return None
         return self._send('set {} {} {} {} {} {}'
             .format(chip, timer, enable, period, duty, polarity))
@@ -315,7 +324,7 @@ class pypwm_client:
 if __name__ == "__main__":
 
     usage = '''Usage: v{}
-    {} command <options>
+    {} command <options>  [--logfile file]
     where 'command' is one of:
         server
         states
@@ -326,6 +335,7 @@ if __name__ == "__main__":
 
     'server' starts a server on {}.
     - needs to run as root, see the main documentation for more.
+    - logfile is optional
 
     All other commands are sent to the server, all arguments are mandatory
 
@@ -356,6 +366,7 @@ if __name__ == "__main__":
     - Attempting to set the enable or polarity states will fail unless
       a valid period (non zero) is supplied or was previously set
     - The duty_cycle cannot exceed the period
+    - Set operations are logged to the console, but not to disk logfiles
 
     Currently you can only supply the pwm 'value' in nanoseconds; ie: the
     overall time for each pulse cycle, and the active time within that pulse.
@@ -396,6 +407,28 @@ if __name__ == "__main__":
         p = pypwm_server(logfile)
         p.server(owner=_sockowner, perm=_sockperm)
         print('Server Exited')
+
+    def stopserver():
+        '''
+          Query the server for it's PID and then kill that
+        '''
+        with Client(socket, authkey=auth) as conn:
+            conn.send('info')
+            # timeout here.. ?
+            reply = conn.recv()
+        if type(reply) is not list:
+            print('error: failed to stop server, bad response to info query')
+            return 1
+        elif len(reply) != 5:
+            print('error: failed to stop server, info data corrupt')
+            return 1
+        else:
+            try:
+                kill(reply[1], SIGSTOP)
+            except Exception as e:
+                print('error: failed to stop server, process did not exit\n{}'.format(e))
+                return 1
+        return 0
 
     def runcommand(cmdline):
         '''
@@ -439,6 +472,8 @@ if __name__ == "__main__":
     command = argv[1]
     if command == 'server':
         runserver()
+    elif command == 'stopserver':
+        exit(stopserver())
     elif command in ['h', 'help', 'Help', '-h', '--help', 'usage']:
         print(usage)
     else:

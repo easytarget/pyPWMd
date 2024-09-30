@@ -24,7 +24,7 @@ def clean_exit():
     pwm.close(chip, timer)
 
 # Generate a client object
-pwm = pypwm_client()
+pwm = pypwm_client(verbose=True)
 
 if pwm.connected == False:
     print('No PWM server, exiting..')
