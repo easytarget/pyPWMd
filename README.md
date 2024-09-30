@@ -100,8 +100,7 @@ This is a standard python [multiprocessing comms socket](https://docs.python.org
 ### Commandline client
 The *pyPWMd.py* script can be run on the commandline to set and read the timers.
 
-Here is a simple example: see also the shell demo [client-demo.**sh**](./client-demo.sh) and the output from `pyPWMd.py help` (see below).
-
+Here is a simple example: see also the shell demo [client-demo.**sh**](./client-demo.sh).
 ```console
 $ sudo ./pyPWMd.py server --verbose &
 [1] 5994
@@ -112,22 +111,16 @@ Mon Sep 30 12:09:43 2024 :: Scanning for pwm timers
 Mon Sep 30 12:09:43 2024 :: PWM devices:
 Mon Sep 30 12:09:43 2024 :: - /sys/class/pwm/pwmchip0 with 2 timers
 Mon Sep 30 12:09:43 2024 :: Listening on: /run/pwm/pyPWMd.sock
-
 $ ./pyPWMd.py states
 {'0': {0: None, 1: None}}
-
 $ ./pyPWMd.py open 0 1
 Mon Sep 30 12:12:22 2024 :: opened: /sys/class/pwm/pwmchip0/pwm1
-
 $ ./pyPWMd.py states
 {'0': {0: None, 1: [0, 0, 0, 0, '/sys/class/pwm/pwmchip0/pwm1']}}
-
 $ ./pyPWMd.py set 0 1 1 10000 5000 0
 Mon Sep 30 12:13:12 2024 :: set: /sys/class/pwm/pwmchip0/pwm1 = [1, 10000, 5000, 0]
-
 $ ./pyPWMd.py states
 {'0': {0: None, 1: [1, 10000, 5000, 0, '/sys/class/pwm/pwmchip0/pwm1']}}
-
 $ kill 5994
 [1]+  Terminated              sudo ./pyPWMd.py server
 ```
@@ -182,6 +175,7 @@ Properties:
 pypwm_client.connected
       A bool, giving the last known client-server connection status
 ```
+Here is an example of using the library: see also the demo [client-demo.**py**](./client-demo.py).
 For example:
 ```python
 Python 3.12.3 (main, Sep 11 2024, 14:17:37) [GCC 13.2.0] on linux
@@ -259,6 +253,3 @@ Usage: v0.1
     --quiet supresses the console log (overrides --verbose)
     --verbose enables logging of 'set' events
 ```
-
-## Python lib
-ToDo
