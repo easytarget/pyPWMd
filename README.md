@@ -1,4 +1,4 @@
-# Python PWM timer control daemon
+# Python PWM Timer Control Daemon
 
 PWM control in linux is provided by a generic API which is implemented in pwm drivers by device manufacturers. The Device Tree and pinctl are then used to enable PWM timers and map them onto GPIO pins.
 
@@ -70,9 +70,9 @@ Additionally they have some helpers
   * Converts a *frequency* & *power* (pwm ratio) pair of values to *period* and *duty_cycle*
   * And vice versa.
 * `info`
-  * Returns the version, pid, uid, gid and sysfs root path of the server
+  * Returns the *version*, *pid*, *uid*, *gid* and *sysfs root path* of the server
 
-### daemon (server) process
+### Running the Daemon (server) process
 ```console
 ~/pyPWMd $ sudo ./pyPWMd.py server
 Starting Python PWM server v0.1
@@ -84,10 +84,9 @@ Mon Sep 30 12:09:43 2024 :: - /sys/class/pwm/pwmchip0 with 2 timers
 Mon Sep 30 12:09:43 2024 :: Listening on: /run/pwm/pyPWMd.sock
 ```
 This needs to be run as root, in the background. There are many ways of doing this:
-- In the example below I simply background the daemon process
-  - TODO: see if I can make the process background itself? research needed.
-- When testing I tend to run it in a detached [`screen`](https://www.gnu.org/software/screen/manual/screen.html) session, so I can reattach and see logs/errors as needed.
-- TODO: document how to run as a systemd service; in principle easy but I'd like to set access via a `pwm` group as part of this.
+* In the example below I simply background the daemon process
+* When testing I tend to run it in a detached [`screen`](https://www.gnu.org/software/screen/manual/screen.html) session, so I can reattach and see logs/errors as needed.
+* *TODO: document how to run as a systemd service; in principle easy but I'd like to set access via a `pwm` group as part of this*.
 
 #### A little note on security..
 The daemon process runs as the root user, and is written by 'some bloke on the internet' in python. Be sure you trust it before using it..
@@ -135,12 +134,49 @@ Mon Sep 30 12:13:12 2024 :: set: /sys/class/pwm/pwmchip0/pwm1 = [1, 10000, 5000,
 Run `pyPWMd.py help` to see the full command set and syntax.
 
 ## Python client
-ToDo
+Yoou need to import the library, then create a `pypwm_client()` object. This will provide:
+```python
+methods:
+-------
+pypwm_client.open(chip, timer):
+      returns 'True' if the node was successfully opened, or already open
+      or an error string on failure
+pypwm_client.close(chip, timer):
+      returns 'True' if the close was successful or node already closed
+      or an error string on failure
+pypwm_client.get(chip, timer):
+      returns the timer properties as a list, or an error string
+pypwm_client.set(chip, timer, enable=None, pwm=None, polarity=None):
+      'enable' is a bool, 0 or 1
+      'pwm' is a tuple:
+          pwm(period, duty_cycle)
+      'polarity' is a string; 'normal' or 'inversed'.
+      returns 'True' on success, an error string on failure
+pypwm_client.states():
+      Reads the /sys/class/pwm/ tree and returns the state map as a dict     
+pypwm_client.f2p(freq, power):
+      'freq' is an integer
+      'power' is a float (0-1) giving the PWM 'on' time percentage
+      returns a tuple (period, duty):
+        'period' and 'duty' are integers
+pypwm_client.p2f(period, duty):
+      'period' and 'duty' are integers
+      returns a tuple (freq, power):
+        'freq' is an integer and 'power' is a float (max 3 decimals)    
+pypwm_client.info():
+      returns a list with server details
+
+Properties:
+-----------
+pypwm_client.connected
+      A bool, giving the last known client-server connection status
+```
+
 
 # Reference
 
 ## Commandline:
-```
+```console
 Usage: v0.1
     pyPWMd.py command <options>  [--quiet]|[--verbose]
     where 'command' is one of:
