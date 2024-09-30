@@ -25,9 +25,9 @@ It also provides two clients for the daemon; a commandline interface and a pytho
 ### Install
 Clone this repo to a folder:
 ```console
-~ $ git clone https://github.com/easytarget/pyPWMd.git
+$ git clone https://github.com/easytarget/pyPWMd.git
 ...
-~ $ cd pyPWMd
+$ cd pyPWMd
 ```
 #### Requirements
 - python3 (3.7+)
@@ -48,7 +48,7 @@ Once a node is open you can read and set it's properties; for each timer there a
 * **duty_cycle** : The active time of the PWM signal (read/write).
   * Value is in nanoseconds and must be less than or equal to the period.
 * **polarity** : Changes the polarity of the PWM signal (read/write).
-  * Value is the string “normal” or “inversed”.
+  * Value is a integer. 0 for “normal” or 1 for “inversed”.
 
 The pyPWMd server is a front-end to the (legacy) sysFS interface; the kernel.org PWM API describes this in more detail:
 https://www.kernel.org/doc/html/latest/driver-api/pwm.html#using-pwms-with-the-sysfs-interface
@@ -74,7 +74,7 @@ Additionally they have some helpers
 
 ### Running the Daemon (server) process
 ```console
-~/pyPWMd $ sudo ./pyPWMd.py server
+$ sudo ./pyPWMd.py server
 Starting Python PWM server v0.1
 
 Mon Sep 30 12:09:43 2024 :: Server init
@@ -103,9 +103,9 @@ The *pyPWMd.py* script can be run on the commandline to set and read the timers.
 Here is a simple example: see also the shell demo [client-demo.**sh**](./client-demo.sh) and the output from `pyPWMd.py help` (see below).
 
 ```console
-~/pyPWMd $ sudo ./pyPWMd.py server --verbose &
+$ sudo ./pyPWMd.py server --verbose &
 [1] 5994
-~/pyPWMd $ Starting Python PWM server v0.1
+$ Starting Python PWM server v0.1
 
 Mon Sep 30 12:09:43 2024 :: Server init
 Mon Sep 30 12:09:43 2024 :: Scanning for pwm timers
@@ -113,65 +113,94 @@ Mon Sep 30 12:09:43 2024 :: PWM devices:
 Mon Sep 30 12:09:43 2024 :: - /sys/class/pwm/pwmchip0 with 2 timers
 Mon Sep 30 12:09:43 2024 :: Listening on: /run/pwm/pyPWMd.sock
 
-~/pyPWMd $ ./pyPWMd.py states
+$ ./pyPWMd.py states
 {'0': {0: None, 1: None}}
 
-~/pyPWMd $ ./pyPWMd.py open 0 1
+$ ./pyPWMd.py open 0 1
 Mon Sep 30 12:12:22 2024 :: opened: /sys/class/pwm/pwmchip0/pwm1
 
-~/pyPWMd $ ./pyPWMd.py states
+$ ./pyPWMd.py states
 {'0': {0: None, 1: [0, 0, 0, 0, '/sys/class/pwm/pwmchip0/pwm1']}}
 
-~/pyPWMd $ ./pyPWMd.py set 0 1 1 10000 5000 0
+$ ./pyPWMd.py set 0 1 1 10000 5000 0
 Mon Sep 30 12:13:12 2024 :: set: /sys/class/pwm/pwmchip0/pwm1 = [1, 10000, 5000, 0]
 
-~/pyPWMd $ ./pyPWMd.py states
+$ ./pyPWMd.py states
 {'0': {0: None, 1: [1, 10000, 5000, 0, '/sys/class/pwm/pwmchip0/pwm1']}}
 
-~/pyPWMd $ kill 5994
+$ kill 5994
 [1]+  Terminated              sudo ./pyPWMd.py server
 ```
 Run `pyPWMd.py help` to see the full command set and syntax.
 
 ## Python client
 Yoou need to import the library, then create a `pypwm_client()` object. This will provide:
-```python
+```console
 methods:
 -------
 pypwm_client.open(chip, timer):
-      returns 'True' if the node was successfully opened, or already open
+      Returns 'True' if the node was successfully opened, or already open
       or an error string on failure
+
 pypwm_client.close(chip, timer):
-      returns 'True' if the close was successful or node already closed
+      Returns 'True' if the close was successful or node already closed
       or an error string on failure
+
 pypwm_client.get(chip, timer):
-      returns the timer properties as a list, or an error string
+      Returns the timer properties as a tuple, or an error string
+
 pypwm_client.set(chip, timer, enable=None, pwm=None, polarity=None):
       'enable' is a bool, 0 or 1
       'pwm' is a tuple:
           pwm(period, duty_cycle)
-      'polarity' is a string; 'normal' or 'inversed'.
-      returns 'True' on success, an error string on failure
+      'polarity' is 0 for 'normal' or 1 for 'inversed'.
+      These values are optional:
+        If omitted the current value will be used
+        This can cause errors, eg if 'enable' is set without while 'pwm' is
+        still at it's default, unitialised, (0,0) setting
+      Returns 'True' on success, an error string on failure
+
 pypwm_client.states():
-      Reads the /sys/class/pwm/ tree and returns the state map as a dict     
+      Reads the /sys/class/pwm/ tree and returns the state map as a dict
+
 pypwm_client.f2p(freq, power):
       'freq' is an integer
       'power' is a float (0-1) giving the PWM 'on' time percentage
-      returns a tuple (period, duty):
+      Returns a tuple (period, duty):
         'period' and 'duty' are integers
+
 pypwm_client.p2f(period, duty):
       'period' and 'duty' are integers
-      returns a tuple (freq, power):
-        'freq' is an integer and 'power' is a float (max 3 decimals)    
+      Returns a tuple (freq, power)
+        'freq' is an integer and 'power' is a float (max 3 decimals)
+
 pypwm_client.info():
-      returns a list with server details
+      Returns a list with server details
 
 Properties:
 -----------
 pypwm_client.connected
       A bool, giving the last known client-server connection status
 ```
-
+For example:
+```python
+Python 3.12.3 (main, Sep 11 2024, 14:17:37) [GCC 13.2.0] on linux
+Type "help", "copyright", "credits" or "license" for more information.
+>>> import pyPWMd
+>>> p = pyPWMd.pypwm_client()
+>>> p.states()
+{'0': {0: None, 1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None}}
+>>> p.open(0,2)
+True
+>>> p.get(0,2)
+(0, (1000, 1000), 0)
+>>> p.set(0, 2, 0, p.f2p(5000, 0.5), 0)
+True
+>>> p.states()
+{'0': {0: None, 1: None, 2: (0, (200000, 100000), 0), 3: None, 4: None, 5: None, 6: None, 7: None}}
+>>> p.close(0,2)
+True
+```
 
 # Reference
 
