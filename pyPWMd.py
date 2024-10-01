@@ -5,8 +5,7 @@
 
 from time import ctime
 from sys import argv, exit
-from os import path, remove, makedirs, chown, chmod, getuid, getgid, getpid, kill
-from signal import SIGSTOP
+from os import path, remove, makedirs, chown, chmod, getuid, getgid, getpid
 from glob import glob
 from multiprocessing.connection import Listener, Client
 from json import dumps, loads
@@ -316,9 +315,10 @@ class pypwm_client:
             try:
                 period, duty = pwm
             except Exception as e:
-                self._print('{}: error: pwm tuple ({}) is incorrect: {}'
-                    .format(__name__, pwm, e))
-                return None
+                msg = '{}: error: pwm tuple ({}) is incorrect: {}'
+                    .format(__name__, pwm, e)
+                self._print(msg)
+                return msg
         return self._send('set {} {} {} {} {} {}'
             .format(chip, timer, enable, period, duty, polarity))
 
