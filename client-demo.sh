@@ -24,7 +24,7 @@ $pypwmd states
 
 # A simple fader
 while true ; do
-    for duty in 40 100 400 1000 4000 10000 6000 1200 600 120 60 0 ; do
+    for duty in 60 120 600 1200 6000 10000 6000 1200 600 120 60 0 ; do
         echo -n "."
         $pypwmd set $chip $timer 1 10000 $duty 0
         sleep 0.5
