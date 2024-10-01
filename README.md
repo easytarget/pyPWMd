@@ -1,32 +1,43 @@
 # Python PWM Timer Control Daemon
 
-PWM control in linux is provided by a generic API which is implemented in pwm drivers by device manufacturers. The Device Tree and pinctl are then used to enable PWM timers and map them onto GPIO pins.
+Hardware based **P**ulse **W**idth **M**odulation ([PWM](https://learn.sparkfun.com/tutorials/pulse-width-modulation/all)) is a common feature of modern Single Board Computers. 
 
-The PWM Timers are then controlled [via the API](https://www.kernel.org/doc/html/latest/driver-api/pwm.html), and the `/sys/class/pwm` tree.
+The chipsets on these boards can produce very precice PWM signals using onboard timers, typically there are a number of timers which are then assigned to specific GPIO lines. Many have a GPIO connector based on the 'standard' set by the Raspberry Pi.
+
+Sometimes PWM timers are used internally on the board to drive status LED's, LCD panel illumination and other board features. But they can also be used to control external devices such as LED strips, Servos and Heaters via the gpio connector pins.
+
+## Hardware PWM in linux
+
+PWM control in linux is provided by a generic API which is implemented in kernel drivers by device manufacturers. The Device Tree and pinctl are then used to enable PWM timers and map them onto GPIO pins.
+
+The PWM Timers are controlled [via the API](https://www.kernel.org/doc/html/latest/driver-api/pwm.html), and the `/sys/class/pwm` tree.
 - Individual GPIO pins are muxed (mapped) to the timers, this is done via device tree overlays.
-  - Generally there is a limited set of mappings available.
+- Generally there is a limited set of mappings available. 
 
 This is highly device dependent, and this guide does not attempt to cover the hardware and software aspects of identifying and mapping the pins.
   - For the MangoPI MQ Pro I have a guide here: https://github.com/easytarget/MQ-Pro-IO
   - A lot of the 'custom device tree' [building and installing](https://github.com/easytarget/MQ-Pro-IO/blob/main/build-trees/README.md) information in that guide is generic for any modern SBC running recent Linux versions.
   - On the Raspberry Pi there are standard Device Tree Overlays you can apply provided with Raspi OS, eg: https://raspberrypi.stackexchange.com/a/143644
 
-There is not (yet) a good generic solution for allowing non-root users to access the PWM timer devices, controlling them as the root user is straightforward (see the API doc), but control from a non-root user is trickier.
+### The Issue: by default only the root user can control the PWM timers.
+
+There is not (yet) a good generic solution for allowing userland (non-root) access to the PWM timer devices; controlling them as the root user is straightforward (see the API doc), but ordinary users have no permission to access the tree.
 - On Raspberry PI's this is provided by the `raspi-gpio` package and `RPi.GPIO` python library.
-- I have a non-Pi Single Board COmputer based on risc-v, and the Pi packages are not compatible
-  - https://github.com/easytarget/MQ-Pro-IO
+- I have two non-Pi Single Board Computers based on risc-v. These have PWM lines and drivers available, but the Pi packages are specific to the Pi hardware and not compatible with my boards
+- A 'generic' and device neutral approach is needed
 
-## A Python based approach to providing Userland control of PWM timers in linux.
+## A Python based generic approach to providing Userland control of PWM timers in linux.
 
-**pyPWMd** is a tool that can run a daemon process as root, which controls the timers via the `/sys/class/pwm` tree and provides a simple socket based interface to the timers.
+**pyPWMd** is a tool that can run a daemon process as root which controls the timers via the `/sys/class/pwm` tree and provides a simple socket based interface to the timers.
 
 It also provides two clients for the daemon; a commandline interface and a python class.
+
+I have tested this on my MangoPI MQ-Pro (Allwinner D1 risc-v) and a Raspberry Pi 3A. It will work on any system that correctly implements the Linux PWM API.
 
 ### Install
 Clone this repo to a folder:
 ```console
 $ git clone https://github.com/easytarget/pyPWMd.git
-...
 $ cd pyPWMd
 ```
 ### Requirements
@@ -35,12 +46,11 @@ $ cd pyPWMd
 - Timers enabled and mapped to a gpio pin
 
 ## Use
-
 The PWM timers are arranged by chip number, then timer number.
 
-By default timers do not have a control node open, before you can read or write timer properties the node must be opened (eg created at `/sys/class/pwm/pwmchip<chip#>/pwm<timer#>`). When control is no longer needed the node can be closed again.
+By default timers do not have a control node open. Before you can read or write timer properties the node must be opened (eg created at `/sys/class/pwm/pwmchip<chip#>/pwm<timer#>`). When control is no longer needed the node can be closed again.
 
-Once a node is open you can read and set it's properties; for each timer there are four (integer) values:
+Once a node is open you can read and set properties; for each timer there are four (integer) values:
 * **enable** : Enable/disable the PWM signal (read/write).
   * 0 = disabled, 1 - enabled
 * **period** : The total period of the PWM signal (read/write).
@@ -100,7 +110,8 @@ This is a standard python [multiprocessing comms socket](https://docs.python.org
 ### Commandline client
 The *pyPWMd.py* script can be run on the commandline to set and read the timers.
 
-Here is a simple example: see also the shell demo [client-demo.sh](./client-demo.sh).
+Here is a simple example from a Raspberry Pi (2 pwm timers):
+* Also see the the shell demo [client-demo.sh](./client-demo.sh).
 ```console
 $ sudo ./pyPWMd.py server --verbose &
 [1] 5994
@@ -116,11 +127,11 @@ $ ./pyPWMd.py states
 $ ./pyPWMd.py open 0 1
 Mon Sep 30 12:12:22 2024 :: opened: /sys/class/pwm/pwmchip0/pwm1
 $ ./pyPWMd.py states
-{'0': {0: None, 1: [0, 0, 0, 0, '/sys/class/pwm/pwmchip0/pwm1']}}
+{'0': {0: None, 1: (0, (0, 0), 0)}}
 $ ./pyPWMd.py set 0 1 1 10000 5000 0
 Mon Sep 30 12:13:12 2024 :: set: /sys/class/pwm/pwmchip0/pwm1 = [1, 10000, 5000, 0]
 $ ./pyPWMd.py states
-{'0': {0: None, 1: [1, 10000, 5000, 0, '/sys/class/pwm/pwmchip0/pwm1']}}
+{'0': {0: None, 1: (1, (10000, 5000), 0)}}
 $ kill 5994
 [1]+  Terminated              sudo ./pyPWMd.py server
 ```
@@ -147,9 +158,9 @@ pypwm_client.set(chip, timer, enable=None, pwm=None, polarity=None):
       'pwm' is a tuple:
           pwm(period, duty_cycle)
       'polarity' is 0 for 'normal' or 1 for 'inversed'.
-      These values are optional:
-        If omitted the current value will be used
-        This can cause errors, eg if 'enable' is set without while 'pwm' is
+      The values are optional:
+      - If omitted the current value will be used
+      - This can cause errors, eg if 'enable' is set while 'pwm' is
         still at it's default, unitialised, (0,0) setting
       Returns 'True' on success, an error string on failure
 
@@ -175,8 +186,8 @@ Properties:
 pypwm_client.connected
       A bool, giving the last known client-server connection status
 ```
-Here is an example of using the library: see also the demo [client-demo.py](./client-demo.py).
-For example:
+Here is an example of using the library on my MQ-Pro (8 pwm timers):
+* Also see the demo [client-demo.py](./client-demo.py).
 ```python
 Python 3.12.3 (main, Sep 11 2024, 14:17:37) [GCC 13.2.0] on linux
 Type "help", "copyright", "credits" or "license" for more information.
@@ -196,10 +207,9 @@ True
 True
 ```
 
-# Reference
-
-## Commandline:
+# Commandline help reference
 ```console
+$ ./pyPWMd.py help
 Usage: v0.1
     pyPWMd.py command <options>  [--quiet]|[--verbose]
     where 'command' is one of:
