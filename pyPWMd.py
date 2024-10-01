@@ -315,8 +315,7 @@ class pypwm_client:
             try:
                 period, duty = pwm
             except Exception as e:
-                msg = '{}: error: pwm tuple ({}) is incorrect: {}'
-                    .format(__name__, pwm, e)
+                msg = '{}: error: pwm tuple ({}) incorrect: {}'.format(__name__, pwm, e)
                 self._print(msg)
                 return msg
         return self._send('set {} {} {} {} {} {}'
