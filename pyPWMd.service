@@ -1,0 +1,14 @@
+[Unit]
+Description=PWM timer daemon
+After=multi-user.target
+
+[Service]
+Type=simple
+Restart=always
+WorkingDirectory=/root/pyPWMd
+ExecStart=/usr/bin/python3 /root/pyPWMd/SBCEye.py
+User=root
+Group=pwm
+
+[Install]
+WantedBy=multi-user.target
