@@ -358,8 +358,8 @@ if __name__ == "__main__":
     - Exported entries are a list of the parameters (see below) followed
       by the timer's node path in the /sys tree
 
-    'get' returns nothing if the timer is not exported, otherwise it will
-    return four numeric values, these are (in sequence):
+    'get' returns 'None' if the timer is not exported, otherwise it will
+    return four numeric values: <enable> <period> <duty_cycle> <polarity>
 
     'set' will change an exported nodes settings with the supplied values.
     - enable and polarity are boolean values, 0 or 1
@@ -368,10 +368,14 @@ if __name__ == "__main__":
     - The duty_cycle cannot exceed the period
     - Set operations are logged to the console, but not to disk logfiles
 
-    Currently you can only supply the pwm 'value' in nanoseconds; ie: the
-    overall time for each pulse cycle, and the active time within that pulse.
-    - ToDo: provide helper functions to convert 'frequency/fraction' values
-      into 'period/duty_cycle' ones, anv vice-versa
+    'f2p' converts two arguments, a frequency + power-ratio to a
+    period + duration as used by the 'set' command above.
+    - Frequency is an interger (in Hz)
+    - Ratio is a float, 0-1, giving the % 'on time' for the signal.
+
+    'p2f' is the reverse of 'f2p' above, giving a frequency + power-ratio
+    from a period + duration given by the 'get' or 'states' commands.
+    - Period and duration are integers.
 
     Options (only apply to server):
     --quiet supresses the console log (overrides --verbose)
@@ -420,7 +424,6 @@ if __name__ == "__main__":
             reply = conn.recv()
         if reply is None:
             state = 1
-            reply = ''
         elif type(reply) == str and 'error' in reply.lower():
             state = 1
         else:
