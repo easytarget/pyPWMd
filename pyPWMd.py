@@ -39,10 +39,11 @@ class pypwm_server:
         self._polarities = ['normal', 'inversed']
 
         self._log('\nServer v{} init'.format(version))
-        self._log('Scanning for pwm timers')
+        self._log('pid: {}, uid: {}, gid: {}'.format(getpid(), getuid(), getgid()))
+        self._log('Scanning {} for pwm timers'.format(self._sysbase))
         chips = self._chipscan()
         if len(chips) == 0:
-            self._log('No PWM devices available in {}!'.format(self._sysbase))
+            self._log('Warning: No PWM devices available!')
         else:
             self._log('PWM devices:')
             for chip in chips.keys():
@@ -55,6 +56,7 @@ class pypwm_server:
             for line in string.strip().split('\n'):
                 out += '{} :: {}'.format(ctime(), line)
             print(out)
+        return string
 
     def _chipscan(self):
         #returns a dict with <path>:<number of pwms>
@@ -108,17 +110,15 @@ class pypwm_server:
                 with open(n + '/' + p, 'w') as f:
                     f.write(str(v))
             except (FileNotFoundError, OSError) as e:
-                self._log('Cannot set {}/{} :: {}'.format(n, p, repr(e)))
+                self._log('error: failed to set {}/{} :: {}'.format(n, p, repr(e)))
 
         node = '{}/{}{}/pwm{}'.format(self._sysbase, self._chipbase, chip, timer)
         if not path.exists(node):
-            self._log('error: attempt to set unexported timer {}'.format(node))
-            return 'error: attempt to set unexported timer {}'.format(node)
+            return self._log('error: attempt to set unexported timer {}'.format(node))
         state = list(self._gettimer(node))
         if period is not None:
             if duty > period:
-                self._log('error: cannot set duty={} greater than period={}'.format(duty, period))
-                return 'error: cannot set duty={} greater than period={}'.format(duty, period)
+                return self._log('error: cannot set duty={} greater than period={}'.format(duty, period))
             if state[1] != period:
                 if state[1] > 0:
                     # if period already has a value, set duty=0 before it is changed
@@ -146,10 +146,9 @@ class pypwm_server:
             with open(node + '/export', 'w') as export:
                 export.write(str(timer))
         except (FileNotFoundError, OSError) as e:
-            self._log('Cannot access {}/export :: {}'.format(node, repr(e)))
-            return 'Cannot access {}/export :: {}'.format(node, repr(e))
+            return self._log('error: cannot access {}/export :: {}'.format(node, repr(e)))
         if not path.exists(node + '/pwm' + str(timer)):
-            return 'Failed to create {}/pwm'.format(node)
+            return self._log('error: failed to create {}/pwm'.format(node))
         else:
             self._log('opened: {}/pwm{}'.format(node, timer))
             return True
@@ -162,10 +161,9 @@ class pypwm_server:
             with open(node + '/unexport', 'w') as unexport:
                 unexport.write(str(timer))
         except (FileNotFoundError, OSError) as e:
-            self._log('Cannot access {}/unexport :: {}'.format(node, repr(e)))
-            return 'Cannot access {}/unexport :: {}'.format(node, repr(e))
+            return self._log('error: cannot access {}/unexport :: {}'.format(node, repr(e)))
         if path.exists(node + '/pwm' + str(timer)):
-            return 'Failed to destroy {}/pwm'.format(node)
+            return self._log('error: failed to destroy {}/pwm'.format(node))
         else:
             self._log('closed: {}/pwm{}'.format(node, timer))
             return True
@@ -230,14 +228,11 @@ class pypwm_server:
                 else:
                     args[i] = int(args[i])
             except:
-                self._log('error: incorrect argument \'{}\' for \'{}\''.format(args[i], cmd))
-                return 'error: imcorrect argument: \'{}\' for \'{}\''.format(args[i], cmd)
+                return self._log('error: incorrect argument \'{}\' for \'{}\''.format(args[i], cmd))
         if cmd not in cmdset.keys():
-            self._log('error: unknown command \'{}\''.format(cmd))
-            return 'error: unknown command \'{}\''.format(cmd)
+            return self._log('error: unknown command \'{}\''.format(cmd))
         if len(args) != cmdset[cmd]:
-            self._log('error: incorrect argument count {} for \'{}\''.format(len(cmdline),cmd))
-            return 'error: incorrect argument count {} for \'{}\''.format(len(cmdline), cmd)
+            return self._log('error: incorrect argument count {} for \'{}\''.format(len(cmdline),cmd))
         return getattr(self,cmd)(*args)
 
 class pypwm_client:
