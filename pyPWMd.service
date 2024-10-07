@@ -5,10 +5,16 @@ After=multi-user.target
 [Service]
 Type=simple
 Restart=always
-WorkingDirectory=/root/pyPWMd
-ExecStart=/usr/bin/python3 /root/pyPWMd/SBCEye.py
 User=root
 Group=pwm
+UMask=0117
+RuntimeDirectory=pwm
+RuntimeDirectoryMode=770
+LogsDirectory=pwm
+LogsDirectoryMode=755
+WorkingDirectory=/root/pyPWMd
+#ExecStart=/usr/bin/python3 /root/pyPWMd/pyPWMd.py server
+ExecStart=/usr/bin/python3 /root/pyPWMd.py server $LOGS_DIRECTORY
 
 [Install]
 WantedBy=multi-user.target
