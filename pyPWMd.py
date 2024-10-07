@@ -16,7 +16,7 @@ version = '0.1'
 
 # Define the socket
 _sockdir = '/run/pwm'
-socket = _sockdir + '/pyPWMd.socket
+socket = _sockdir + '/pyPWMd.socket'
 # By default use version string as socket auth token, prevents API fails.
 auth = bytes(version.encode('utf-8'))
 
