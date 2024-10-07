@@ -1,6 +1,6 @@
 from pyPWMd import pypwm_client
 from time import sleep
-from sys import exit
+from sys import exit, argv
 from atexit import register
 
 '''
@@ -43,4 +43,4 @@ while True:
     power = round(min(max(power + step, 0),1),3)
     step = -step if power in [0,1] else step
     print('{}'.format('.' if power != 0 else '.\n'), end='', flush=True)
-    sleep(0.2)
+    sleep(0.2 if len(argv) == 0 else float(argv[1]))
