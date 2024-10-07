@@ -16,9 +16,7 @@ version = '0.1'
 
 # Define the socket
 _sockdir = '/run/pwm'
-socket = _sockdir + '/pyPWMd.socket'
-_sockowner = None  # Override inherited socket owner with a (UID, GID) tuple
-_sockperm = None  # Override socket permissions, eg: 0o770 (octal!)
+socket = _sockdir + '/pyPWMd.socket
 # By default use version string as socket auth token, prevents API fails.
 auth = bytes(version.encode('utf-8'))
 
@@ -183,21 +181,11 @@ class pypwm_server:
         power = round(duty / period, 3)
         return freq, power
 
-    def server(self, owner=None, perm=None):
+    def server(self):
         self._log('Starting server: pid: {}, uid: {}, gid: {}'.format(
             getpid(), getuid(), getgid()))
         with Listener(self.sock, authkey=auth) as listener:
             self._log('Listening on: ' + listener.address)
-            if owner is not None:
-                try:
-                    chown(self.sock, *owner)
-                except Exception as e:
-                    self._log("warning: could not set socket owner: {}".format(e))
-            if perm is not None:
-                try:
-                    chmod(self.sock, perm)
-                except Exception as e:
-                    self._log("warning: could not set socket permissions: {}".format(e))
             # Now loop forever listening and responding to socket
             try:
                 while True:
@@ -337,7 +325,7 @@ if __name__ == "__main__":
     usage = '''Usage: v{0}
     {1} command <options> [--verbose]
     where 'command' is one of:
-        server
+        server [<logfile>]
         states
         open <chip> <timer>
         close <chip> <timer>
@@ -345,7 +333,8 @@ if __name__ == "__main__":
         get <chip> <timer>
 
     'server' starts a server on {2}.
-    - needs to run as root, see the main documentation for more.
+    - needs to run as root, see the main documentation for more
+    - an optional logfile or log directory can be supplied
 
     All other commands are sent to the server, all arguments are mandatory
 
