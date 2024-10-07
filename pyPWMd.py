@@ -16,10 +16,10 @@ version = '0.1'
 
 # Define the socket
 _sockdir = '/run/pwm'
-_sockowner = (1000,1000)  # UID/GID
-_sockperm = 0o770  # Note.. octal
-socket = _sockdir + '/pyPWMd.sock'
-# By default use version string as auth token, prevents API fails.
+socket = _sockdir + '/pyPWMd.socket'
+_sockowner = None  # Override inherited socket owner with a (UID, GID) tuple
+_sockperm = None  # Override socket permissions, eg: 0o770 (octal!)
+# By default use version string as socket auth token, prevents API fails.
 auth = bytes(version.encode('utf-8'))
 
 # pwm API specifies nanoseconds as the base period unit.
@@ -31,15 +31,19 @@ class pypwm_server:
         Needs root..
     '''
 
-    def __init__(self, logging=False, verbose=False):
-        self._logging = logging
+    def __init__(self, logfile=None, verbose=False):
+        self.logfile = logfile
         self._verbose = verbose
+        self.sock = socket
         self._sysbase  = '/sys/class/pwm'
         self._chipbase = 'pwmchip'
         self._polarities = ['normal', 'inversed']
 
+        # initialise and check logfile? disable file logging if n/a
         self._log('\nServer v{} init'.format(version))
-        self._log('pid: {}, uid: {}, gid: {}'.format(getpid(), getuid(), getgid()))
+        if logfile is not None:
+            self._log('Logging to: {}{}'.format(logfile,
+                ' (verbose)' if verbose else ''))
         self._log('Scanning {} for pwm timers'.format(self._sysbase))
         chips = self._chipscan()
         if len(chips) == 0:
@@ -50,12 +54,13 @@ class pypwm_server:
                 self._log('- {} with {} timers'.format(chip, chips[chip]))
 
     def _log(self, string):
-        if self._logging:
-            string += '\n'
-            out = '\n' if string[0] == '\n' else ''
-            for line in string.strip().split('\n'):
-                out += '{} :: {}'.format(ctime(), line)
-            print(out)
+        out = ''
+        for line in string.strip().split('\n'):
+            out += '{} :: {}\n'.format(ctime(), line)
+        print(out.strip(), flush=True)
+        if self.logfile is not None:
+            with open(self.logfile,'a') as log:
+                log.write(out)
         return string
 
     def _chipscan(self):
@@ -169,35 +174,40 @@ class pypwm_server:
             return True
 
     def f2p(self, freq, power):
-        # convert a frequency(Hz) and power(fraction) to
-        #  a period and duty_cycle in nanoseconds
         period = int(basefreq / freq)
         duty = int(period * power)
         return period, duty
 
     def p2f(self, period, duty):
-        # convert a period and duty_cycle in nanoseconds to
-        #  a frequency(Hz) and power(fraction)
         freq = round(basefreq / period, 3)
         power = round(duty / period, 3)
         return freq, power
 
-    def server(self, sock=socket, owner=None, perm=None):
-        with Listener(sock, authkey=auth) as listener:
+    def server(self, owner=None, perm=None):
+        self._log('Starting server: pid: {}, uid: {}, gid: {}'.format(
+            getpid(), getuid(), getgid()))
+        with Listener(self.sock, authkey=auth) as listener:
             self._log('Listening on: ' + listener.address)
             if owner is not None:
                 try:
-                    chown(sock, *owner)
+                    chown(self.sock, *owner)
                 except Exception as e:
                     self._log("warning: could not set socket owner: {}".format(e))
             if perm is not None:
                 try:
-                    chmod(sock, perm)
+                    chmod(self.sock, perm)
                 except Exception as e:
                     self._log("warning: could not set socket permissions: {}".format(e))
             # Now loop forever listening and responding to socket
-            while True:
-                self._listen(listener)
+            try:
+                while True:
+                    self._listen(listener)
+            except:
+                self._log('exiting:\n{}'.format(e))
+            try:
+                remove(self.sock)
+            except:
+                self._log('error: failed to cleanup socket {} on exit'.format(self.sock))
 
     def _listen(self,listener):
         try:
@@ -325,7 +335,7 @@ class pypwm_client:
 if __name__ == "__main__":
 
     usage = '''Usage: v{0}
-    {1} command <options>  [--quiet]|[--verbose]
+    {1} command <options> [--verbose]
     where 'command' is one of:
         server
         states
@@ -377,27 +387,16 @@ if __name__ == "__main__":
     from a period + duration given by the 'get' or 'states' commands.
     - Period and duration are integers.
 
-    Options (only apply to server):
-    --quiet supresses the console log (overrides --verbose)
+    Options (currently only applies to server):
     --verbose enables logging of 'set' events
 
     Homepage: https://github.com/easytarget/pyPWMd
     '''.format(version, name, socket).strip()
 
-    def runserver():
+    def runserver(logfile, verbose):
         '''
           Init and run a server,
         '''
-        # Ensure we have a socket directory in /run
-        if not path.isdir(_sockdir):
-            try:
-                makedirs(_sockdir)
-            except Exception as e:
-                print('Cannot create socket directory: {}.'.format(_sockdir))
-                print(e)
-                print('Running as uid:gid {}:{}'.format(getuid(),getgid()))
-                exit(1)
-
         # Clean any existing socket (or error)
         if path.exists(socket):
             try:
@@ -407,10 +406,11 @@ if __name__ == "__main__":
                 print(e)
                 print('Is another instance running?')
                 exit(1)
-
+        if logfile is not None:
+            if path.isdir(logfile):
+                logfile += '/pyPWMd.log'
         print('Starting Python PWM server v{}'.format(version))
-
-        p = pypwm_server(logging, verbose)
+        p = pypwm_server(logfile, verbose)
         p.server(owner=_sockowner, perm=_sockperm)
         print('Server Exited')
 
@@ -434,30 +434,23 @@ if __name__ == "__main__":
         Main Code
     '''
     # Parse Arguments and take appropriate action
-    try:
-        l = argv.index('--quiet')
-    except ValueError:
-        logging = True
-    else:
-        logging = False
-        argv.pop(l)
-
-    try:
-        l = argv.index('--verbose')
-    except ValueError:
-        verbose = False
-    else:
-        verbose = True
-        argv.pop(l)
-
     if len(argv) == 1:
         print('{}: No command specified, try: {} help'.format(name, argv[0]))
         exit(2)
 
+    try:
+        l = argv.index('--verbose')
+    except ValueError:
+        logall = False
+    else:
+        logall = True
+        argv.pop(l)
+
     # Command is always first argument
     command = argv[1]
     if command == 'server':
-        runserver()
+        logfile = None if len(argv) < 3 else argv[2]
+        runserver(logfile, logall)
     elif command in ['h', 'help', 'Help', '-h', '--help', 'usage']:
         print(usage)
     else:
