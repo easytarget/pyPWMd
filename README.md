@@ -214,18 +214,19 @@ True
 # Commandline help reference
 ```console
 $ ./pyPWMd.py help
-Usage: v0.1
-    pyPWMd.py command <options>  [--quiet]|[--verbose]
+Usage: v1.0
+    pyPWMd.py command <options> [--verbose]
     where 'command' is one of:
-        server
+        server [<logfile>]
         states
         open <chip> <timer>
         close <chip> <timer>
         set <chip> <timer> <enable> <period> <duty_cycle> <polarity>
         get <chip> <timer>
 
-    'server' starts a server on /run/pwm/pyPWMd.sock.
-    - needs to run as root, see the main documentation for more.
+    'server' starts a server on /run/pwm/pyPWMd.socket.
+    - needs to run as root, see the main documentation for more
+    - an optional logfile or log directory can be supplied
 
     All other commands are sent to the server, all arguments are mandatory
 
@@ -245,11 +246,11 @@ Usage: v0.1
 
     'states' lists the available pwm chips, timers, and their status.
     - If a node entry is unexported it is shown as 'None'
-    - Exported entries are a list of the parameters (see below) followed
-      by the timer's node path in the /sys tree
+    - Exported entries are a list of the parameters (see 'get', below)
+      followed by the timer's node path in the /sys/class/pwm/ tree
 
-    'get' returns nothing if the timer is not exported, otherwise it will
-    return four numeric values, these are (in sequence):
+    'get' returns 'None' if the timer is not exported, otherwise it will
+    return four numeric values: <enable> <period> <duty_cycle> <polarity>
 
     'set' will change an exported nodes settings with the supplied values.
     - enable and polarity are boolean values, 0 or 1
@@ -258,12 +259,19 @@ Usage: v0.1
     - The duty_cycle cannot exceed the period
     - Set operations are logged to the console, but not to disk logfiles
 
-    Currently you can only supply the pwm 'value' in nanoseconds; ie: the
-    overall time for each pulse cycle, and the active time within that pulse.
-    - ToDo: provide helper functions to convert 'frequency/fraction' values
-      into 'period/duty_cycle' ones, anv vice-versa
+    'f2p' converts two arguments, a frequency + power_ratio to a
+    period + duty_cycle as used by the 'set' command above.
+    - Frequency is an interger, in Hz
+    - Power_ratio is ao float, 0-1, giving the % 'on time' for the signal.
+    - Returns the period and duty_cycle in nanoseconds
 
-    Options (only apply to server):
-    --quiet supresses the console log (overrides --verbose)
+    'p2f' is the reverse of 'f2p' above, giving a frequency + power_ratio
+    from the period + duty_cycle values returned by the 'get' or 'states' commands.
+    - Period and duration arguments are integers in nanoseconds.
+    - Returns the frequency in Hz and power_ratio as a float between 0 and 1
+
+    Options (currently only applies to server):
     --verbose enables logging of 'set' events
+
+    Homepage: https://github.com/easytarget/pyPWMd
 ```

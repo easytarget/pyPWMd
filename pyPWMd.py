@@ -354,8 +354,8 @@ if __name__ == "__main__":
 
     'states' lists the available pwm chips, timers, and their status.
     - If a node entry is unexported it is shown as 'None'
-    - Exported entries are a list of the parameters (see below) followed
-      by the timer's node path in the /sys tree
+    - Exported entries are a list of the parameters (see 'get', below)
+      followed by the timer's node path in the /sys/class/pwm/ tree
 
     'get' returns 'None' if the timer is not exported, otherwise it will
     return four numeric values: <enable> <period> <duty_cycle> <polarity>
@@ -367,14 +367,16 @@ if __name__ == "__main__":
     - The duty_cycle cannot exceed the period
     - Set operations are logged to the console, but not to disk logfiles
 
-    'f2p' converts two arguments, a frequency + power-ratio to a
-    period + duration as used by the 'set' command above.
-    - Frequency is an interger (in Hz)
-    - Ratio is a float, 0-1, giving the % 'on time' for the signal.
+    'f2p' converts two arguments, a frequency + power_ratio to a
+    period + duty_cycle as used by the 'set' command above.
+    - Frequency is an interger, in Hz
+    - Power_ratio is ao float, 0-1, giving the % 'on time' for the signal.
+    - Returns the period and duty_cycle in nanoseconds
 
-    'p2f' is the reverse of 'f2p' above, giving a frequency + power-ratio
-    from a period + duration given by the 'get' or 'states' commands.
-    - Period and duration are integers.
+    'p2f' is the reverse of 'f2p' above, giving a frequency + power_ratio
+    from the period + duty_cycle values returned by the 'get' or 'states' commands.
+    - Period and duration arguments are integers in nanoseconds.
+    - Returns the frequency in Hz and power_ratio as a float between 0 and 1
 
     Options (currently only applies to server):
     --verbose enables logging of 'set' events
