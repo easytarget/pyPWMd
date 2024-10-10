@@ -95,8 +95,8 @@ uid=1000(<username>) gid=1000(<usergroup>) groups=1000(<usergroup>),...,115(pwm)
 ```
 Clone the pyPWMd repo to the root home directory, link the `.service` file into `/etc/systemd/service/`, register the service with systemd then enable+start the service:
 ```console
-$ sudo git clone https://github.com/easytarget/pyPWMd.git /root/pyPWMd
-$ sudo ln -s /root/pyPWMd/pyPWMd.service /etc/systemd/system/
+$ sudo git clone https://github.com/easytarget/pyPWMd.git /usr/local/lib/pyPWMd
+$ sudo ln -s /usr/local/lib/pyPWMd/pyPWMd.service /etc/systemd/system/
 $ sudo systemctl daemon-reload
 $ sudo systemctl enable --now pyPWMd.service
 ```
@@ -105,7 +105,7 @@ The service should now be running at `/run/pwm/pyPWMd.socket`: Check with `$ sud
 ### Commandline Client
 Link `pyPWMd.py` as `/usr/bin/pwmtimerctl`
 ```console
-$ sudo ln -s /root/pyPWMd/pyPWMd.py /usr/bin/pwmtimerctl
+$ sudo ln -s /usr/local/lib/pyPWMd/pyPWMd.py /usr/local/bin/pwmtimerctl
 ```
 Test!
 * Make sure you have a **new** user login shell, *with the user in the `pwm` group!*
