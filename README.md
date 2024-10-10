@@ -93,6 +93,8 @@ $ sudo usermod -a -G pwm <username>
 $ id <username>
 uid=1000(<username>) gid=1000(<usergroup>) groups=1000(<usergroup>),...,115(pwm)
 ```
+After being added the users need to log out then back in for the new group to be available to them.
+
 Clone the pyPWMd repo to the root home directory, link the `.service` file into `/etc/systemd/service/`, register the service with systemd then enable+start the service:
 ```console
 $ sudo git clone https://github.com/easytarget/pyPWMd.git /usr/local/lib/pyPWMd
@@ -102,8 +104,8 @@ $ sudo systemctl enable --now pyPWMd.service
 ```
 The service should now be running at `/run/pwm/pyPWMd.socket`: Check with `$ sudo systemctl status pyPWMd.service`, logfiles will be generated in `/var/log/pwm/`.
 
-### Commandline Client
-Link `pyPWMd.py` as `/usr/bin/pwmtimerctl`
+### Commandline Client: `pwmtimerctl`
+Link `pyPWMd.py` as `/usr/local/bin/pwmtimerctl`
 ```console
 $ sudo ln -s /usr/local/lib/pyPWMd/pyPWMd.py /usr/local/bin/pwmtimerctl
 ```
