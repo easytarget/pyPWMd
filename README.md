@@ -1,6 +1,6 @@
 # Python PWM Timer Control Daemon
 
-Hardware based **P**ulse **W**idth **M**odulation ([PWM](https://learn.sparkfun.com/tutorials/pulse-width-modulation/all)) is a common feature of modern Single Board Computers. 
+Hardware based **P**ulse **W**idth **M**odulation ([PWM](https://learn.sparkfun.com/tutorials/pulse-width-modulation/all)) is a common feature of modern Single Board Computers.
 
 The chipsets on these boards can produce very precice PWM signals using onboard timers, typically there are a number of timers which are then assigned to specific GPIO lines. Many have a GPIO connector based on the 'standard' set by the Raspberry Pi.
 
@@ -12,7 +12,7 @@ PWM control in linux is provided by a generic API which is implemented in kernel
 
 The PWM Timers are controlled [via the API](https://www.kernel.org/doc/html/latest/driver-api/pwm.html), and the `/sys/class/pwm` tree.
 - Individual GPIO pins are muxed (mapped) to the timers, this is done via device tree overlays.
-- Generally there is a limited set of mappings available. 
+- Generally there is a limited set of mappings available.
 
 This is highly device dependent, and this guide does not attempt to cover the hardware and software aspects of identifying and mapping the pins.
   - For the MangoPI MQ Pro I have a guide here: https://github.com/easytarget/MQ-Pro-IO
@@ -34,16 +34,10 @@ It also provides two clients for the daemon; a commandline interface and a pytho
 
 I have tested this on my MangoPI MQ-Pro (Allwinner D1 risc-v) and a Raspberry Pi 3A. It will work on any system that correctly implements the Linux PWM API.
 
-### Install
-Clone this repo to a folder:
-```console
-$ git clone https://github.com/easytarget/pyPWMd.git
-$ cd pyPWMd
-```
-### Requirements
+## Requirements
 - python3 (3.7+)
 - A recent and updated linux distro
-- Timers enabled and mapped to a gpio pin
+- Timers enabled and mapped to a gpio pin via a device tree or overlay
 
 ## Use
 The PWM timers are arranged by chip number, then timer number.
@@ -82,62 +76,94 @@ Additionally they have some helpers
 * `info`
   * Returns the *version*, *pid*, *uid*, *gid* and *sysfs root path* of the server
 
-### Running the Daemon (server) process
-```console
-$ sudo ./pyPWMd.py server
-Starting Python PWM server v0.1
+## Install
 
-Mon Sep 30 12:09:43 2024 :: Server init
-Mon Sep 30 12:09:43 2024 :: Scanning for pwm timers
-Mon Sep 30 12:09:43 2024 :: PWM devices:
-Mon Sep 30 12:09:43 2024 :: - /sys/class/pwm/pwmchip0 with 2 timers
-Mon Sep 30 12:09:43 2024 :: Listening on: /run/pwm/pyPWMd.sock
+### Running daemon automatically via systemd
+The `pyPWMd.service` file will create a pwm server instance at `/run/pwm/pyPWMd.socket` accessible to all users in the group `pwm`.
+
+Create a 'pwm' system group for users:
+```console
+$ sudo groupadd -K GID_MIN=100 -K GID_MAX=499 pwm
+$ getent group pwm
+pwm:x:115:
 ```
-This needs to be run as root, in the background. There are many ways of doing this:
-* In the example below I simply background the daemon process
-* When testing I tend to run it in a detached [`screen`](https://www.gnu.org/software/screen/manual/screen.html) session, so I can reattach and see logs/errors as needed.
-* *TODO: document how to run as a systemd service; in principle easy but I'd like to set access via a `pwm` group as part of this*.
+Add the required users to the `pwm` group
+```console
+$ sudo usermod -a -G pwm <username>
+$ id <username>
+uid=1000(<username>) gid=1000(<usergroup>) groups=1000(<usergroup>),...,115(pwm)
+```
+Clone the pyPWMd repo to the root home directory, link the `.service` file into `/etc/systemd/service/`, register the service with systemd then enable+start the service:
+```console
+$ sudo git clone https://github.com/easytarget/pyPWMd.git /root/pyPWMd
+$ sudo ln -s /root/pyPWMd/pyPWMd.service /etc/systemd/system/
+$ sudo systemctl daemon-reload
+$ sudo systemctl enable --now pyPWMd.service
+```
+The service should now be running at `/run/pwm/pyPWMd.socket`: Check with `$ sudo systemctl status pyPWMd.service`, logfiles will be generated in `/var/log/pwm/`.
+
+Link `pyPWMd.py` as `/usr/bin/pwmtimerctl`
+```console
+$ sudo ln -s /root/pyPWMd/pyPWMd.py /usr/bin/pwmtimerctl
+```
+Test!
+* Make sure you have a **new** user login shell, *with the user in the `pwm` group!*
+```console
+$ pwmtimerctl info
+```
 
 #### A little note on security..
 The daemon process runs as the root user, and is written by 'some bloke on the internet' in python. Be sure you trust it before using it..
 - You can look at the code, of course. It only reads/writes to files in the /sys/class/pwm folder.
 - Python is considered quite secure, and this tool only uses libraries from the python standard library (no random libraries from PiPy etc..)
 - It uses a standard python [multiprocessing comms socket](https://docs.python.org/3/library/multiprocessing.html#module-multiprocessing.connection) for communication
-  - There is a simple authentication mechanism on the socket, the athentication key can be changed from the default to provide access control.
   - By default a local unix filesystem socket is used, permissions can be set on this to allow access via groups.
-  - You can change the socket definition to a network one and allow remote timer control, which could be useful but be careful doing this.
+  - There is also an authentication mechanism on the socket, the key can be changed from the default to provide additional control.
+  - You can change the socket definition to a network one and allow remote timer control, which could be useful, but be careful doing this.
+
+## Use
 
 ### Commandline client
-The *pyPWMd.py* script can be run on the commandline to set and read the timers.
-
 Here is a simple example from a Raspberry Pi (2 pwm timers):
 * Also see the the shell demo [client-demo.sh](./client-demo.sh).
+
+Start a server If needed (or do the server daemon install steps above)
 ```console
+$ sudo mkdir -p /run/pwm
 $ sudo ./pyPWMd.py server --verbose &
 [1] 431460
-$ Starting Python PWM server v0.1
-
+Starting Python PWM server v0.1
 Mon Sep 30 12:09:43 2024 :: Server init
 Mon Sep 30 12:09:43 2024 :: Scanning for pwm timers
 Mon Sep 30 12:09:43 2024 :: PWM devices:
 Mon Sep 30 12:09:43 2024 :: - /sys/class/pwm/pwmchip0 with 2 timers
-Mon Sep 30 12:09:43 2024 :: Listening on: /run/pwm/pyPWMd.sock
-$ ./pyPWMd.py states
+Mon Sep 30 12:09:43 2024 :: Listening on: /run/pwm/pyPWMd.socket
+$ sudo chmod 777 /run/pwm/pyPWMd.socket
+$ alias pwmtimerctl `pwd`/pyPWMd.py
+```
+
+Then control the PWM timers with:
+```console
+$ pwmtimerctl states
 {'0': {0: None, 1: None}}
-$ ./pyPWMd.py open 0 1
+$ pwmtimerctl open 0 1
 Mon Sep 30 12:12:22 2024 :: opened: /sys/class/pwm/pwmchip0/pwm1
-$ ./pyPWMd.py states
+$ pwmtimerctl states
 {'0': {0: None, 1: (0, (0, 0), 0)}}
-$ ./pyPWMd.py f2p 100000 0.5
+$ pwmtimerctl f2p 100000 0.5
 (10000, 5000)
-$ ./pyPWMd.py set 0 1 1 10000 5000 0
+$ pwmtimerctl set 0 1 1 10000 5000 0
 Mon Sep 30 12:13:12 2024 :: set: /sys/class/pwm/pwmchip0/pwm1 = [1, 10000, 5000, 0]
-$ ./pyPWMd.py states
+$ pwmtimerctl states
 {'0': {0: None, 1: (1, (10000, 5000), 0)}}
-$ ./pyPWMd.py info
+```
+If you started a test server stop it with:
+```console
+$ pwmtimerctl info
 ['0.1', 431460, 0, 0, '/sys/class/pwm']
 $ kill 431460
 [1]+  Terminated              sudo ./pyPWMd.py server
+$ sudo rmdir /run/pwm
 ```
 Run `pyPWMd.py help` to see the full command set and syntax.
 
