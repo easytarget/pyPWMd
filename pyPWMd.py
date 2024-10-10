@@ -33,6 +33,7 @@ class pypwm_server:
         self.logfile = logfile
         self._verbose = verbose
         self.sock = socket
+        self.running = False
         self._sysbase  = '/sys/class/pwm'
         self._chipbase = 'pwmchip'
         self._polarities = ['normal', 'inversed']
@@ -82,11 +83,11 @@ class pypwm_server:
         polarity = self._polarities.index(self._getprop(node + '/polarity'))
         return enable, period, duty, polarity
 
-    def info(self):
+    def _info(self):
         self._log('client sent info request')
         return [version, getpid(), getuid(), getgid(), self._sysbase]
 
-    def states(self):
+    def _states(self):
         pwms = {}
         chips = self._chipscan()
         for chip in chips.keys():
@@ -97,14 +98,14 @@ class pypwm_server:
                 pwms[c][timer] = self._gettimer(node) if path.exists(node) else None
         return pwms
 
-    def get(self, chip, timer):
+    def _get(self, chip, timer):
         node = '{}/{}{}/pwm{}'.format(self._sysbase,
             self._chipbase, chip, timer)
         if not path.exists(node):
             return None
         return tuple(self._gettimer(node))
 
-    def set(self, chip, timer, enable, period, duty, polarity):
+    def _set(self, chip, timer, enable, period, duty, polarity):
         # Set properties for a timer
 
         def setprop(n, p, v):
@@ -141,7 +142,7 @@ class pypwm_server:
             self._log('set: {} = {} '.format(node, list(self._gettimer(node))))
         return True
 
-    def open(self, chip, timer):
+    def _open(self, chip, timer):
         node = '{}/{}{}'.format(self._sysbase, self._chipbase, chip)
         if path.exists(node + '/pwm' + str(timer)):
             return True
@@ -156,7 +157,7 @@ class pypwm_server:
             self._log('opened: {}/pwm{}'.format(node, timer))
             return True
 
-    def close(self, chip, timer):
+    def _close(self, chip, timer):
         node = '{}/{}{}'.format(self._sysbase, self._chipbase, chip)
         if not path.exists(node + '/pwm' + str(timer)):
             return True
@@ -171,12 +172,12 @@ class pypwm_server:
             self._log('closed: {}/pwm{}'.format(node, timer))
             return True
 
-    def f2p(self, freq, power):
+    def _f2p(self, freq, power):
         period = int(basefreq / freq)
         duty = int(period * power)
         return period, duty
 
-    def p2f(self, period, duty):
+    def _p2f(self, period, duty):
         freq = round(basefreq / period, 3)
         power = round(duty / period, 3)
         return freq, power
@@ -184,18 +185,19 @@ class pypwm_server:
     def server(self):
         self._log('Starting server: pid: {}, uid: {}, gid: {}'.format(
             getpid(), getuid(), getgid()))
-        with Listener(self.sock, authkey=auth) as listener:
-            self._log('Listening on: ' + listener.address)
-            # Now loop forever listening and responding to socket
-            try:
-                while True:
-                    self._listen(listener)
-            except:
-                self._log('exiting:\n{}'.format(e))
-            try:
-                remove(self.sock)
-            except:
-                self._log('error: failed to cleanup socket {} on exit'.format(self.sock))
+        try:
+            with Listener(self.sock, authkey=auth) as listener:
+                self._log('Listening on: ' + listener.address)
+                # Now loop forever listening and responding to socket
+                self.running = True
+                try:
+                    while self.running:
+                        self.running = self._listen(listener)
+                except Exception as e:
+                    self._log('exiting:\n{}'.format(e))
+                    self.running = False
+        except Exception as e:
+            self._log('error: failed to start server\n{}'.format(e))
 
     def _listen(self,listener):
         try:
@@ -203,14 +205,18 @@ class pypwm_server:
                 try:
                     recieved = conn.recv()
                 except EOFError:
-                    recieved = ''
-                    self._log('warning: null connection on socket: {}'.format(recieved))
-                    return   # empty connection, ignore
+                    self._log('warning: null connection on socket')
+                    return True  # empty connection, ignore
+                except Exception as e:
+                    self._log('error: recieve failure on socket\n{}'.format(e))
+                    return False
                 cmdline = recieved.strip().split(' ')
                 #self._log('Recieved: {}'.format(cmdline))  # debug
                 conn.send(self._process(cmdline))
+            return True
         except Exception as e:
-            self._log('warning: error on socket\n{}'.format(e))
+            self._log('warning: listener error on socket\n{}'.format(e))
+            return False
 
     def _process(self, cmdline):
         cmdset = {'info':0, 'states':0, 'open':2, 'close':2,
@@ -231,7 +237,7 @@ class pypwm_server:
             return self._log('error: unknown command \'{}\''.format(cmd))
         if len(args) != cmdset[cmd]:
             return self._log('error: incorrect argument count {} for \'{}\''.format(len(cmdline),cmd))
-        return getattr(self,cmd)(*args)
+        return getattr(self,'_' + cmd)(*args)
 
 class pypwm_client:
     '''
@@ -401,7 +407,7 @@ if __name__ == "__main__":
                 logfile += '/pyPWMd.log'
         print('Starting Python PWM server v{}'.format(version))
         p = pypwm_server(logfile, verbose)
-        p.server(owner=_sockowner, perm=_sockperm)
+        p.server()
         print('Server Exited')
 
     def runcommand(cmdline):
@@ -410,10 +416,13 @@ if __name__ == "__main__":
         '''
         if not path.exists(socket):
             return('error: no pwm server at \'{}\''.format(socket), 1)
-        with Client(socket, authkey=auth) as conn:
-            conn.send(' '.join(cmdline))
-            # timeout here.. ?
-            reply = conn.recv()
+        try:
+            with Client(socket, authkey=auth) as conn:
+                conn.send(' '.join(cmdline))
+                # timeout here.. ?
+                reply = conn.recv()
+        except Exception as e:
+            reply = 'error: communications failure on socket:\n{}'.format(e)
         if reply is None:
             state = 1
         elif type(reply) == str and 'error' in reply.lower():
