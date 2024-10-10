@@ -170,8 +170,8 @@ $ sudo rmdir /run/pwm
 ```
 Run `pyPWMd.py help` to see the full command set and syntax.
 
-## Python client
-Yoou need to import the library, then create a `pypwm_client()` object. This will provide:
+## Python Client
+You need to import the library, then create a `pypwm_client()` object. This will provide:
 ```console
 methods:
 -------
@@ -219,6 +219,12 @@ Properties:
 pypwm_client.connected
       A bool, giving the last known client-server connection status
 ```
+
+Create a softlink to the library in your project folder (or clone the whole repo there)
+```console
+$ ln -s /usr/local/lib/pyPWMd/pyPWMd.py .
+```
+
 Here is an example of using the library on my MQ-Pro (8 pwm timers):
 * Also see the demo [client-demo.py](./client-demo.py).
 ```python
