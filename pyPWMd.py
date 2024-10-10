@@ -408,6 +408,8 @@ if __name__ == "__main__":
         '''
           Pass the the command to server
         '''
+        if not path.exists(socket):
+            return('error: no pwm server at \'{}\''.format(socket), 1)
         with Client(socket, authkey=auth) as conn:
             conn.send(' '.join(cmdline))
             # timeout here.. ?
