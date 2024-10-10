@@ -241,11 +241,11 @@ class pypwm_client:
     def __init__(self, sock=socket, verify=True, verbose=False):
         self._sock = sock
         self.verbose = verbose
-        self.connected = True
+        self.connected = None
         if verify:
             info = self.info()
             if info is None:
-                self.connected = False
+                return
             elif info[0] != version:
                 self._print('{}: warning: version missmatch to server running at {}'
                     .format(__name__, self._sock))
@@ -253,6 +253,7 @@ class pypwm_client:
     def _print(self, msg):
         if self.verbose:
             print(msg)
+        return msg
 
     def _send(self, cmdline):
         if not path.exists(self._sock):
@@ -308,9 +309,7 @@ class pypwm_client:
             try:
                 period, duty = pwm
             except Exception as e:
-                msg = '{}: error: pwm tuple ({}) incorrect: {}'.format(__name__, pwm, e)
-                self._print(msg)
-                return msg
+                return self._print('{}: error: pwm tuple ({}) incorrect: {}'.format(__name__, pwm, e))
         return self._send('set {} {} {} {} {} {}'
             .format(chip, timer, enable, period, duty, polarity))
 
