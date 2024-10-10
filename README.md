@@ -39,7 +39,7 @@ I have tested this on my MangoPI MQ-Pro (Allwinner D1 risc-v) and a Raspberry Pi
 - A recent and updated linux distro
 - Timers enabled and mapped to a gpio pin via a device tree or overlay
 
-## Use
+## Timer control
 The PWM timers are arranged by chip number, then timer number.
 
 By default timers do not have a control node open. Before you can read or write timer properties the node must be opened (eg created at `/sys/class/pwm/pwmchip<chip#>/pwm<timer#>`). When control is no longer needed the node can be closed again.
@@ -76,9 +76,9 @@ Additionally they have some helpers
 * `info`
   * Returns the *version*, *pid*, *uid*, *gid* and *sysfs root path* of the server
 
-## Install
+## Installing
 
-### Running daemon automatically via systemd
+### Systemd service (Daemon)
 The `pyPWMd.service` file will create a pwm server instance at `/run/pwm/pyPWMd.socket` accessible to all users in the group `pwm`.
 
 Create a 'pwm' system group for users:
@@ -102,6 +102,7 @@ $ sudo systemctl enable --now pyPWMd.service
 ```
 The service should now be running at `/run/pwm/pyPWMd.socket`: Check with `$ sudo systemctl status pyPWMd.service`, logfiles will be generated in `/var/log/pwm/`.
 
+### Commandline Client
 Link `pyPWMd.py` as `/usr/bin/pwmtimerctl`
 ```console
 $ sudo ln -s /root/pyPWMd/pyPWMd.py /usr/bin/pwmtimerctl
@@ -112,7 +113,7 @@ Test!
 $ pwmtimerctl info
 ```
 
-#### A little note on security..
+### A little note on security..
 The daemon process runs as the root user, and is written by 'some bloke on the internet' in python. Be sure you trust it before using it..
 - You can look at the code, of course. It only reads/writes to files in the /sys/class/pwm folder.
 - Python is considered quite secure, and this tool only uses libraries from the python standard library (no random libraries from PiPy etc..)
