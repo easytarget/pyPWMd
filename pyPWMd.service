@@ -12,8 +12,8 @@ RuntimeDirectory=pwm
 RuntimeDirectoryMode=750
 LogsDirectory=pwm
 LogsDirectoryMode=755
-WorkingDirectory=/root/pyPWMd
-ExecStart=/usr/bin/python3 /root/pyPWMd/pyPWMd.py server $LOGS_DIRECTORY
+WorkingDirectory=/usr/local/lib/pyPWMd
+ExecStart=/usr/bin/python3 /usr/local/lib/pyPWMd/pyPWMd.py server $LOGS_DIRECTORY
 
 [Install]
 WantedBy=multi-user.target
