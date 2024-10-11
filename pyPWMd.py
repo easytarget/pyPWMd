@@ -8,6 +8,7 @@ from sys import argv, exit
 from os import path, remove, makedirs, chown, chmod, getuid, getgid, getpid
 from glob import glob
 from multiprocessing.connection import Listener, Client
+from multiprocessing import AuthenticationError
 from json import dumps, loads
 import atexit
 
@@ -190,7 +191,7 @@ class pypwm_server:
         try:
             with Listener(self.sock, authkey=auth) as listener:
                 self._log('Listening on: ' + listener.address)
-                # Now loop forever listening and responding to socket
+                # Now loop forever while listening and responding to socket
                 self.running = True
                 try:
                     while self.running:
@@ -207,17 +208,23 @@ class pypwm_server:
                 try:
                     recieved = conn.recv()
                 except EOFError:
-                    self._log('warning: null connection on socket')
-                    return True  # empty connection, ignore
+                    if self._verbose:
+                        self._log('warning: null connection on socket')
+                    return True
                 except Exception as e:
-                    self._log('error: recieve failure on socket\n{}'.format(e))
-                    return False
+                    if self._verbose:
+                        self._log('warning: recieve failure on socket: {}'.format(e))
+                    return True
                 cmdline = recieved.strip().split(' ')
                 #self._log('Recieved: {}'.format(cmdline))  # debug
                 conn.send(self._process(cmdline))
             return True
+        except AuthenticationError as e:
+            if self._verbose:
+                self._log('warning: authentication error on socket: {}'.format(e))
+            return True
         except Exception as e:
-            self._log('warning: listener error on socket\n{}'.format(e))
+            self._log('error: listner failed on socket\n{}'.format(e))
             return False
 
     def _process(self, cmdline):
