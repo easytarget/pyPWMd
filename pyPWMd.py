@@ -8,11 +8,13 @@ from sys import argv, exit
 from os import path, remove, makedirs, chown, chmod, getuid, getgid, getpid
 from glob import glob
 from multiprocessing.connection import Listener, Client
+from multiprocessing import AuthenticationError
 from json import dumps, loads
+import atexit
 
 # Some housekeeping
 name = path.basename(__file__)
-version = '0.1'
+version = '0.2'
 
 # Define the socket
 _sockdir = '/run/pwm'
@@ -39,7 +41,8 @@ class pypwm_server:
         self._polarities = ['normal', 'inversed']
 
         # initialise and check logfile? disable file logging if n/a
-        self._log('\nServer v{} init'.format(version))
+        self._log('')
+        self._log('PWM server v{} starting'.format(version))
         if logfile is not None:
             self._log('Logging to: {}{}'.format(logfile,
                 ' (verbose)' if verbose else ''))
@@ -188,7 +191,7 @@ class pypwm_server:
         try:
             with Listener(self.sock, authkey=auth) as listener:
                 self._log('Listening on: ' + listener.address)
-                # Now loop forever listening and responding to socket
+                # Now loop forever while listening and responding to socket
                 self.running = True
                 try:
                     while self.running:
@@ -205,17 +208,23 @@ class pypwm_server:
                 try:
                     recieved = conn.recv()
                 except EOFError:
-                    self._log('warning: null connection on socket')
-                    return True  # empty connection, ignore
+                    if self._verbose:
+                        self._log('warning: null connection on socket')
+                    return True
                 except Exception as e:
-                    self._log('error: recieve failure on socket\n{}'.format(e))
-                    return False
+                    if self._verbose:
+                        self._log('warning: recieve failure on socket: {}'.format(e))
+                    return True
                 cmdline = recieved.strip().split(' ')
                 #self._log('Recieved: {}'.format(cmdline))  # debug
                 conn.send(self._process(cmdline))
             return True
+        except AuthenticationError as e:
+            if self._verbose:
+                self._log('warning: authentication error on socket: {}'.format(e))
+            return True
         except Exception as e:
-            self._log('warning: listener error on socket\n{}'.format(e))
+            self._log('error: listner failed on socket\n{}'.format(e))
             return False
 
     def _process(self, cmdline):
@@ -393,7 +402,14 @@ if __name__ == "__main__":
         '''
           Init and run a server,
         '''
-        # Clean any existing socket (or error)
+        def cleanup(p):
+            try:  # try to ensure the socket is removed...
+                remove(socket)
+            except:  # ...but not too hard.
+                pass
+            p._log('Server exiting')
+
+        # Clean any existing socket on startup (or error)
         if path.exists(socket):
             try:
                 remove(socket)
@@ -407,8 +423,8 @@ if __name__ == "__main__":
                 logfile += '/pyPWMd.log'
         print('Starting Python PWM server v{}'.format(version))
         p = pypwm_server(logfile, verbose)
+        atexit.register(cleanup,p)
         p.server()
-        print('Server Exited')
 
     def runcommand(cmdline):
         '''
