@@ -9,10 +9,11 @@ from os import path, remove, makedirs, chown, chmod, getuid, getgid, getpid
 from glob import glob
 from multiprocessing.connection import Listener, Client
 from json import dumps, loads
+import atexit
 
 # Some housekeeping
 name = path.basename(__file__)
-version = '0.1'
+version = '0.2'
 
 # Define the socket
 _sockdir = '/run/pwm'
@@ -39,7 +40,8 @@ class pypwm_server:
         self._polarities = ['normal', 'inversed']
 
         # initialise and check logfile? disable file logging if n/a
-        self._log('\nServer v{} init'.format(version))
+        self._log('')
+        self._log('PWM server v{} starting'.format(version))
         if logfile is not None:
             self._log('Logging to: {}{}'.format(logfile,
                 ' (verbose)' if verbose else ''))
@@ -393,7 +395,14 @@ if __name__ == "__main__":
         '''
           Init and run a server,
         '''
-        # Clean any existing socket (or error)
+        def cleanup(p):
+            try:  # try to ensure the socket is removed...
+                remove(socket)
+            except:  # ...but not too hard.
+                pass
+            p._log('Server exiting')
+
+        # Clean any existing socket on startup (or error)
         if path.exists(socket):
             try:
                 remove(socket)
@@ -407,8 +416,8 @@ if __name__ == "__main__":
                 logfile += '/pyPWMd.log'
         print('Starting Python PWM server v{}'.format(version))
         p = pypwm_server(logfile, verbose)
+        atexit.register(cleanup,p)
         p.server()
-        print('Server Exited')
 
     def runcommand(cmdline):
         '''
