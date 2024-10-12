@@ -56,13 +56,14 @@ class pypwm_server:
                 self._log('- {} with {} timers'.format(chip, chips[chip]))
 
     def _log(self, string):
-        out = ''
+        out = log = ''
         for line in string.strip().split('\n'):
-            out += '{} :: {}\n'.format(ctime(), line)
+            out += '{}: {}\n'.format(name, line)
+            log += '{} :: {}\n'.format(ctime(), line)
         print(out.strip(), flush=True)
         if self.logfile is not None:
-            with open(self.logfile,'a') as log:
-                log.write(out)
+            with open(self.logfile,'a') as l:
+                l.write(log)
         return string
 
     def _chipscan(self):
@@ -281,11 +282,14 @@ class pypwm_client:
                 ret = conn.recv()
                 self.connected = True
                 return ret
+        except AuthenticationError as e:
+            self._print('{}: error: authentication failed: {}'
+                .format(__name__, e))
         except Exception as e:
-            self._print('{}: error taking to server at {}\n{}'
+            self._print('{}: error: socket communications failed: {}\n{}'
                 .format(__name__, self._sock, e))
-            self.connected = False
-            return None
+        self.connected = False
+        return None
 
     def _pwmify(self, timer):
         p = timer[1]
@@ -437,8 +441,10 @@ if __name__ == "__main__":
                 conn.send(' '.join(cmdline))
                 # timeout here.. ?
                 reply = conn.recv()
+        except AuthenticationError as e:
+            reply = 'error: authentication failed: {}'.format(e)
         except Exception as e:
-            reply = 'error: communications failure on socket:\n{}'.format(e)
+            reply = 'error: socket communications failed:\n{}'.format(e)
         if reply is None:
             state = 1
         elif type(reply) == str and 'error' in reply.lower():
