@@ -342,6 +342,9 @@ class pypwm_client:
         return self._send('p2f {} {}'.format(period, duty))
 
 if __name__ == "__main__":
+    '''
+        Commandline Client
+    '''
 
     usage = '''Usage: v{0}
     {1} command <options> [--verbose]
@@ -456,9 +459,6 @@ if __name__ == "__main__":
             state = 0
         return reply, state
 
-    '''
-        Main Code
-    '''
     # Parse Arguments and take appropriate action
     if len(argv) == 1:
         print('{}: No command specified, try: {} help'.format(name, argv[0]))
