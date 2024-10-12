@@ -242,11 +242,14 @@ class pypwm_server:
                 else:
                     args[i] = int(args[i])
             except:
-                return self._log('error: incorrect argument \'{}\' for \'{}\''.format(args[i], cmd))
+                err = 'client error: incorrect argument \'{}\' for \'{}\''.format(args[i], cmd)
+                return self._log(err) if self._verbose else err
         if cmd not in cmdset.keys():
-            return self._log('error: unknown command \'{}\''.format(cmd))
+            err = 'client error: unknown command \'{}\''.format(cmd)
+            return self._log(err) if self._verbose else err
         if len(args) != cmdset[cmd]:
-            return self._log('error: incorrect argument count {} for \'{}\''.format(len(cmdline),cmd))
+            err = 'client error: incorrect argument count {} for \'{}\''.format(len(cmdline),cmd)
+            return self._log(err) if self._verbose else err
         return getattr(self,'_' + cmd)(*args)
 
 class pypwm_client:
