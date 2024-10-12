@@ -78,6 +78,38 @@ Additionally they have some helpers
 
 ## Installing
 
+### Standalone server for testing or one-off use
+Start: The following example is from a Raspberry Pi 3A with 2 pwm timers.
+```console
+$ git clone https://github.com/easytarget/pyPWMd.git
+$ cd pyPWMd
+$ sudo mkdir -p /run/pwm && sudo chmod 755 /run/pwm
+$ sudo ./pyPWMd.py server --verbose &
+[1] 431460
+Starting Python PWM server v0.1
+Mon Sep 30 12:09:43 2024 :: Server init
+Mon Sep 30 12:09:43 2024 :: Scanning for pwm timers
+Mon Sep 30 12:09:43 2024 :: PWM devices:
+Mon Sep 30 12:09:43 2024 :: - /sys/class/pwm/pwmchip0 with 2 timers
+Mon Sep 30 12:09:43 2024 :: Listening on: /run/pwm/pyPWMd.socket
+$ sudo chmod 777 /run/pwm/pyPWMd.socket
+$ alias pwmtimerctl=`pwd`/pyPWMd.py
+```
+This will put the server into a background process, the `--verbose` optin will show a lot of useful debugging info and this can get intrusive. Omit it as needed.
+
+Once the server is running you can use `pwmtimerctl` on the commandline, or `import pyPWMd` in python to work with the client. See below.
+
+Stop: Once you are done with the server; terminate it by killing the PID
+```console
+$ pwmtimerctl info
+['0.1', 431460, 0, 0, '/sys/class/pwm']
+$ kill 431460
+[1]+  Terminated              sudo ./pyPWMd.py server
+# (could also do kill %1 since the server is backgrounded as #1)
+$ sudo rmdir /run/pwm
+$ unalias pwmtimerctl
+```
+
 ### Systemd service (Daemon)
 The `pyPWMd.service` file will create a pwm server instance at `/run/pwm/pyPWMd.socket` accessible to all users in the group `pwm`.
 
@@ -121,29 +153,15 @@ The daemon process runs as the root user, and is written by 'some bloke on the i
 - Python is considered quite secure, and this tool only uses libraries from the python standard library (no random libraries from PiPy etc..)
 - It uses a standard python [multiprocessing comms socket](https://docs.python.org/3/library/multiprocessing.html#module-multiprocessing.connection) for communication
   - By default a local unix filesystem socket is used, permissions can be set on this to allow access via groups.
-  - There is also an authentication mechanism on the socket, the key can be changed from the default to provide additional control.
-  - You can change the socket definition to a network one and allow remote timer control, which could be useful, but be careful doing this.
+  - There is an authentication mechanism on the socket, by default the api version string is used as the token. This could be modified to provide additional control.
 
 ## Use
 
 ### Commandline client
-Here is a simple example from a Raspberry Pi (2 pwm timers):
+A simple example from a Raspberry Pi (2 pwm timers):
 * Also see the the shell demo [client-demo.sh](./client-demo.sh).
 
-Start a server If needed (or do the server daemon install steps above)
-```console
-$ sudo mkdir -p /run/pwm
-$ sudo ./pyPWMd.py server --verbose &
-[1] 431460
-Starting Python PWM server v0.1
-Mon Sep 30 12:09:43 2024 :: Server init
-Mon Sep 30 12:09:43 2024 :: Scanning for pwm timers
-Mon Sep 30 12:09:43 2024 :: PWM devices:
-Mon Sep 30 12:09:43 2024 :: - /sys/class/pwm/pwmchip0 with 2 timers
-Mon Sep 30 12:09:43 2024 :: Listening on: /run/pwm/pyPWMd.socket
-$ sudo chmod 777 /run/pwm/pyPWMd.socket
-$ alias pwmtimerctl `pwd`/pyPWMd.py
-```
+Start a server If needed (see above)
 
 Then control the PWM timers with:
 ```console
@@ -160,15 +178,7 @@ Mon Sep 30 12:13:12 2024 :: set: /sys/class/pwm/pwmchip0/pwm1 = [1, 10000, 5000,
 $ pwmtimerctl states
 {'0': {0: None, 1: (1, (10000, 5000), 0)}}
 ```
-If you started a test server stop it with:
-```console
-$ pwmtimerctl info
-['0.1', 431460, 0, 0, '/sys/class/pwm']
-$ kill 431460
-[1]+  Terminated              sudo ./pyPWMd.py server
-$ sudo rmdir /run/pwm
-```
-Run `pyPWMd.py help` to see the full command set and syntax.
+Run `pwmtimerctl help` to see the full command set and syntax.
 
 ## Python Client
 You need to import the library, then create a `pypwm_client()` object. This will provide:
@@ -220,11 +230,13 @@ pypwm_client.connected
       A bool, giving the last known client-server connection status
 ```
 
+### python client install
 Create a softlink to the library in your project folder (or clone the whole repo there)
 ```console
 $ ln -s /usr/local/lib/pyPWMd/pyPWMd.py .
 ```
 
+### python client example
 Here is an example of using the library on my MQ-Pro (8 pwm timers):
 * Also see the demo [client-demo.py](./client-demo.py).
 ```python
@@ -246,6 +258,10 @@ True
 True
 ```
 
+## Upgrading
+todo.. easy. just cd.. then git pull, then restart service
+
+-----------------------------
 # Commandline help reference
 ```console
 $ ./pyPWMd.py help
