@@ -87,8 +87,8 @@ class pypwm_server:
         polarity = self._polarities.index(self._getprop(node + '/polarity'))
         return enable, period, duty, polarity
 
-    def _info(self):
-        self._log('client sent info request')
+    def _info(self,client):
+        self._log('client {} sent info request'.format(client))
         return [version, getpid(), getuid(), getgid(), self._sysbase]
 
     def _states(self):
@@ -229,7 +229,7 @@ class pypwm_server:
             return False
 
     def _process(self, cmdline):
-        cmdset = {'info':0, 'states':0, 'open':2, 'close':2,
+        cmdset = {'info':1, 'states':0, 'open':2, 'close':2,
                     'get':2, 'set':6, 'f2p':2, 'p2f':2}
         floatsok = ['f2p', 'p2f']
         cmd = cmdline[0]
@@ -297,7 +297,7 @@ class pypwm_client:
         return (timer[0], (p, d), timer[3])
 
     def info(self):
-        return self._send('info')
+        return self._send('info {}'.format(getpid()))
 
     def states(self):
         states = self._send('states')
@@ -471,11 +471,13 @@ if __name__ == "__main__":
 
     # Command is always first argument
     command = argv[1]
-    if command == 'server':
+    if command == 'info':
+        argv.append(str(getpid()))
+    if command in ['h', 'help', 'Help', '-h', '--help', 'usage']:
+        print(usage)
+    elif command == 'server':
         logfile = None if len(argv) < 3 else argv[2]
         runserver(logfile, logall)
-    elif command in ['h', 'help', 'Help', '-h', '--help', 'usage']:
-        print(usage)
     else:
         response, status = runcommand(argv[1:])
         if response != True:
