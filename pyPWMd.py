@@ -48,6 +48,7 @@ class pypwm_server:
                 ' (verbose)' if verbose else ''))
         self._log('Scanning {} for pwm timers'.format(self._sysbase))
         chips = self._chipscan()
+        self.invertable = [True] * len(chips)
         if len(chips) == 0:
             self._log('Warning: No PWM devices available!')
         else:
@@ -119,6 +120,8 @@ class pypwm_server:
                     f.write(str(v))
             except (FileNotFoundError, OSError) as e:
                 self._log('error: failed to set {}/{} :: {}'.format(n, p, repr(e)))
+                return False
+            return True
 
         node = '{}/{}{}/pwm{}'.format(self._sysbase, self._chipbase, chip, timer)
         if not path.exists(node):
@@ -135,9 +138,12 @@ class pypwm_server:
                 setprop(node, 'period', period)
             if state[2] != duty:
                 setprop(node, 'duty_cycle', duty)
-        if polarity is not None:
+        if polarity is not None and self.invertable[chip] is True:
+            polarity = min(1,max(0,polarity))
             if state[3] != polarity:
-                setprop(node, 'polarity', self._polarities[polarity])
+                if not setprop(node, 'polarity', self._polarities[polarity]):
+                    self.invertable[chip] = False
+                    self._log('info: chip {} is not invertable'.format(chip))
         if enable is not None:
             if state[0] != enable:
                 setprop(node, 'enable', enable)
