@@ -182,19 +182,19 @@ class pypwm_server:
             self._log('closed: {}/pwm{}'.format(node, timer))
             return True
 
-    def _f2p(self, freq, power):
+    def _f2p(self, freq, factor):
         period = int(basefreq / freq)
-        duty = int(period * power)
+        duty = int(period * factor)
         return period, duty
 
     def _p2f(self, period, duty):
         freq = round(basefreq / period, 3)
-        power = round(duty / period, 3)
-        return freq, power
+        factor = round(duty / period, 3)
+        return freq, factor
 
-    def _servo(self, chip, timer, value):
-        # need to decide.. 0->1, 0->180 or -90->0->90
-        return 'SERVO: {} {} {}'.format(chip, timer, value)
+    def _servo(self, chip, timer, factor):
+        factor = max(0,min(1,factor))
+        return 'SERVO: {} {} {}'.format(chip, timer, factor)
 
     def _servoset(self, minpulse=None, maxpulse=None, period = int(2e7)):
         if minpulse is None and maxpulse is None:
@@ -370,8 +370,8 @@ class pypwm_client:
         return self._send('set {} {} {} {} {} {}'
             .format(chip, timer, enable, period, duty, polarity))
 
-    def f2p(self, freq, power):
-        return self._send('f2p {} {}'.format(freq, power))
+    def f2p(self, freq, factor):
+        return self._send('f2p {} {}'.format(freq, factor))
 
     def p2f(self, period, duty):
         return self._send('p2f {} {}'.format(period, duty))
@@ -426,16 +426,16 @@ if __name__ == "__main__":
     - The duty_cycle cannot exceed the period
     - Set operations are logged to the console, but not to disk logfiles
 
-    'f2p' converts two arguments, a frequency + power_ratio to a
+    'f2p' converts two arguments, a frequency + factor to a
     period + duty_cycle as used by the 'set' command above.
     - Frequency is an interger, in Hz
-    - Power_ratio is ao float, 0-1, giving the % 'on time' for the signal.
+    - Factor is a float, 0-1, giving the % 'on time' for the signal.
     - Returns the period and duty_cycle in nanoseconds
 
-    'p2f' is the reverse of 'f2p' above, giving a frequency + power_ratio
+    'p2f' is the reverse of 'f2p' above, giving a frequency + factor
     from the period + duty_cycle values returned by the 'get' or 'states' commands.
     - Period and duration arguments are integers in nanoseconds.
-    - Returns the frequency in Hz and power_ratio as a float between 0 and 1
+    - Returns the frequency in Hz and factor as a float between 0 and 1
 
     Options (currently only applies to server):
     --verbose enables logging of 'set' events
