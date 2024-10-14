@@ -110,7 +110,7 @@ class pypwm_server:
             return None
         return tuple(self._gettimer(node))
 
-    def _set(self, chip, timer, enable, period, duty, polarity):
+    def _set(self, chip, timer, enable, period, duty, polarity=None):
         # Set properties for a timer
 
         def setprop(n, p, v):
@@ -192,7 +192,29 @@ class pypwm_server:
         power = round(duty / period, 3)
         return freq, power
 
+    def _servo(self, chip, timer, value):
+        # need to decide.. 0->1, 0->180 or -90->0->90
+        return 'SERVO: {} {} {}'.format(chip, timer, value)
+
+    def _servoset(self, minpulse=None, maxpulse=None, period = int(2e7)):
+        if minpulse is None and maxpulse is None:
+            return ['Defaults']
+        return 'SERVOSET: {} {} {}'.format(minpulse, maxpulse, period)
+
+    def _pwm(self, chip, timer, factor, freq = 1000):
+        factor = max(0,min(1,factor))
+        return 'PWM: {} {} {} {}'.format(chip, timer, factor, freq)
+
     def server(self):
+        # Clean any existing socket on startup (or error)
+        if path.exists(socket):
+            try:
+                remove(socket)
+            except Exception as e:
+                print('Socket {} already exists and cannot be removed.'.format(socket))
+                print(e)
+                print('Cannot start, is another instance running?')
+                return
         self._log('Starting server: pid: {}, uid: {}, gid: {}'.format(
             getpid(), getuid(), getgid()))
         try:
@@ -206,6 +228,8 @@ class pypwm_server:
                 except Exception as e:
                     self._log('exiting:\n{}'.format(e))
                     self.running = False
+        except FileNotFoundError as e:
+            self._log('error: failed to create socket at {}:\n{}'.format(self.sock,e))
         except Exception as e:
             self._log('error: failed to start server\n{}'.format(e))
 
@@ -235,27 +259,32 @@ class pypwm_server:
             return False
 
     def _process(self, cmdline):
-        cmdset = {'info':1, 'states':0, 'open':2, 'close':2,
-                    'get':2, 'set':6, 'f2p':2, 'p2f':2}
-        floatsok = ['f2p', 'p2f']
+        # 'command':([possible argument lengths],[arguments that are floats])
+        cmdset = {'info':([1],[]), 'states':([0],[]),
+                    'open':([2],[]), 'close':([2],[]),
+                    'get':([2],[]), 'set':([5,6],[]),
+                    'f2p':([2],[1]), 'p2f':([2],[]),
+                    'servo':([3],[2]), 'servoset':([0,2,3],[]),
+                    'pwm':([3,4],[2])}
         cmd = cmdline[0]
         args = [] if len(cmdline) == 1 else cmdline[1:]
         #print('{}({})'.format(cmd, '' if len(args) == 0 else ', '.join(args)))  # DEBUG
-        for i in range(len(args)):
-            try:
-                if cmd in floatsok:
-                    args[i] = float(args[i])
-                else:
-                    args[i] = int(args[i])
-            except:
-                err = 'client error: incorrect argument \'{}\' for \'{}\''.format(args[i], cmd)
-                return self._log(err) if self._verbose else err
         if cmd not in cmdset.keys():
             err = 'client error: unknown command \'{}\''.format(cmd)
             return self._log(err) if self._verbose else err
-        if len(args) != cmdset[cmd]:
-            err = 'client error: incorrect argument count {} for \'{}\''.format(len(cmdline),cmd)
+        if len(args) not in cmdset[cmd][0]:
+            err = 'client error: bad argument count {} for \'{}\''.format(len(cmdline)-1,cmd)
             return self._log(err) if self._verbose else err
+        for i in range(len(args)):
+            try:
+                if i in cmdset[cmd][1]:
+                    args[i] = float(args[i])
+                else:
+                    # wrapping int(float( allows us to specify values as '1e5' etc.
+                    args[i] = int(float(args[i]))
+            except:
+                err = 'client error: incorrect argument \'{}\' for \'{}\''.format(args[i], cmd)
+                return self._log(err) if self._verbose else err
         return getattr(self,'_' + cmd)(*args)
 
 class pypwm_client:
@@ -425,15 +454,6 @@ if __name__ == "__main__":
                 pass
             p._log('Server exiting')
 
-        # Clean any existing socket on startup (or error)
-        if path.exists(socket):
-            try:
-                remove(socket)
-            except Exception as e:
-                print('Socket {} already exists and cannot be removed.'.format(socket))
-                print(e)
-                print('Is another instance running?')
-                exit(1)
         if logfile is not None:
             if path.isdir(logfile):
                 logfile += '/pyPWMd.log'
