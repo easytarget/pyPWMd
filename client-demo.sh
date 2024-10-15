@@ -14,19 +14,17 @@
 #     the gpio pwm chip and timer respectively
 #
 chip=0
-timer=2
-
-pypwmd=./pyPWMd.py
+timer=0
 
 # Open the timer
-$pypwmd open $chip $timer
-$pypwmd states
+pwmtimerctl open $chip $timer
 
+echo "Press ctrl-c to exit."
 # A simple fader
 while true ; do
     for duty in 60 120 600 1200 6000 10000 6000 1200 600 120 60 0 ; do
         echo -n "."
-        $pypwmd set $chip $timer 1 10000 $duty 0
+        pwmtimerctl set $chip $timer 1 10000 $duty 0
         sleep 0.5
     done
     echo

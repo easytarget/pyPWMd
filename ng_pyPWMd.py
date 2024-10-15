@@ -38,21 +38,23 @@ class pypwm_server:
         self.running = False
         self._sysbase  = '/sys/class/pwm'
         self._chipbase = 'pwmchip'
-        self._polarities = ['normal', 'inversed']
 
-        self.dfreq = 1000    # pwm default, hz
-        self.speriod = 0.02  # servo default pulse interval (seconds)
-        self.smin = 0.05     # servo default min pulse (seconds)
-        self.smax = 0.15     # servo default max pulse (seconds)
+        # sensible defaults for pwm and servo
+        self.pfreq = 1000    # pwm default, hz
+        self.speriod = 0.02  # servo default pulse interval (float, seconds)
+        self.smin = 0.0006   # servo default min pulse (float, seconds)
+        self.smax = 0.0024   # servo default max pulse (float, seconds)
+
         # initialise and check logfile? disable file logging if n/a
         self._log('')
         self._log('PWM server v{} starting'.format(version))
         if logfile is not None:
             self._log('Logging to: {}{}'.format(logfile,
                 ' (verbose)' if verbose else ''))
+
+        # Do initial scan for devices
         self._log('Scanning {} for pwm timers'.format(self._sysbase))
         chips = self._chipscan()
-        self.invertable = [True] * len(chips)
         if len(chips) == 0:
             self._log('Warning: No PWM devices available!')
         else:
@@ -89,7 +91,7 @@ class pypwm_server:
         enable = int(self._getprop(node + '/enable'))
         period = int(self._getprop(node + '/period'))
         duty = int(self._getprop(node + '/duty_cycle'))
-        polarity = self._polarities.index(self._getprop(node + '/polarity'))
+        polarity = str(self._getprop(node + '/polarity'))
         return enable, period, duty, polarity
 
     def _info(self,client):
@@ -114,42 +116,38 @@ class pypwm_server:
             return None
         return tuple(self._gettimer(node))
 
-    def _set(self, chip, timer, enable, period, duty, polarity=None):
-        # Set properties for a timer
-
-        def setprop(n, p, v):
+    def _set(self, chip, timer, enable, period, duty):
+        def setprop(n, p, v, r = True):
             # Set an individual node+property with error trap.
             try:
                 with open(n + '/' + p, 'w') as f:
                     f.write(str(v))
             except (FileNotFoundError, OSError) as e:
-                self._log('error: failed to set {}/{} :: {}'.format(n, p, repr(e)))
+                if r:
+                    self._log('error: failed to set {}/{} :: {}'.format(n, p, repr(e)))
                 return False
             return True
 
+        # Set properties for a timer
         node = '{}/{}{}/pwm{}'.format(self._sysbase, self._chipbase, chip, timer)
         if not path.exists(node):
             return self._log('error: attempt to set unexported timer {}'.format(node))
+        if not enable:
+            return setprop(node, 'enable', 0)
+        if duty > period:
+            return self._log('error: cannot set duty={} greater than period={}'.format(duty, period))
         state = list(self._gettimer(node))
-        if period is not None:
-            if duty > period:
-                return self._log('error: cannot set duty={} greater than period={}'.format(duty, period))
-            if state[1] != period:
-                # always set duty=0 before frequency is changed (may fail on initial access)
-                setprop(node, 'duty_cycle', 0)
-                state[2] = 0
-                setprop(node, 'period', period)
-            if state[2] != duty:
-                setprop(node, 'duty_cycle', duty)
-        if polarity is not None and self.invertable[chip] is True:
-            polarity = min(1,max(0,polarity))
-            if state[3] != polarity:
-                if not setprop(node, 'polarity', self._polarities[polarity]):
-                    self.invertable[chip] = False
-                    self._log('info: chip {} is not invertable'.format(chip))
-        if enable is not None:
-            if state[0] != enable:
-                setprop(node, 'enable', enable)
+        if state[3] == 'inversed':  # allow for inversion
+            duty = period - duty
+        if state[1] != period:  # period
+            # always set duty=0 before frequency is changed (may fail on initial access)
+            setprop(node, 'duty_cycle', 0, False)
+            state[2] = 0
+            setprop(node, 'period', period)
+        if state[2] != duty:  # duty
+            setprop(node, 'duty_cycle', duty)
+        if state[0] != 1:  # enable
+            setprop(node, 'enable', 1)
         # do not log to disk unless requested (fills disk and causes extra load)
         if self._verbose:
             self._log('set: {} = {} '.format(node, list(self._gettimer(node))))
@@ -186,11 +184,15 @@ class pypwm_server:
             return True
 
     def _f2p(self, freq, factor):
+        if freq == 0:  # div by zero.
+            return 0, 0
         period = int(basefreq / freq)
         duty = int(period * factor)
         return period, duty
 
     def _p2f(self, period, duty):
+        if period == 0:  # div by zero.
+            return 0, 0
         freq = round(basefreq / period, 3)
         factor = round(duty / period, 3)
         return freq, factor
@@ -201,16 +203,29 @@ class pypwm_server:
 
     def _servoset(self, minpulse=None, maxpulse=None, period = None):
         if minpulse is None and maxpulse is None and period is None:
-            return [self.smin, self.smax, self.speriod]
-        self.smin = self.smin if minpulse is None else minpulse
-        self.smax = self.smax if maxpulse is None else maxpulse
-        self.speriod = self.speriod if period is None else period
+            return (self.smin, self.smax, self.speriod)
+        self.smin = self.smin if minpulse is None else float(minpulse)
+        self.smax = self.smax if maxpulse is None else float(maxpulse)
+        self.speriod = self.speriod if period is None else float(period)
         return 'SERVOSET: {} {} {}'.format(self.smin, self.smax, self.speriod)
 
-    def _pwm(self, chip, timer, factor, freq = None):
+    def _pwm(self, chip, timer, factor = None, freq = None):
+        if factor is None:
+            state = self._get(chip, timer)
+            if state is None:
+                return None
+            else:
+                f, r = self._p2f(state[1],state[2])
+                return (f, 1 - r if state[3] == 'inversed' else r)
         factor = float(max(0,min(1,factor)))
-        self.dfreq = self.dfreq if freq is None else freq
-        return 'PWM: {} {} {} {}'.format(chip, timer, factor, self.dfreq)
+        freq = self.pfreq if freq is None else float(freq)
+        return 'PWM: {} {} {} {}'.format(chip, timer, factor, freq)
+
+    def _pwmfreq(self, freq = None):
+        if freq is None:
+            return self.pfreq
+        self.pfreq = freq
+        return 'PWMFREQ: {}'.format(self.pfreq)
 
     def server(self):
         # Clean any existing socket on startup (or error)
@@ -267,12 +282,10 @@ class pypwm_server:
 
     def _process(self, cmdline):
         # 'command':([possible argument lengths],[arguments that are floats])
-        cmdset = {'info':([1],[]), 'states':([0],[]),
+        cmdset = {  'info':([1],[]), 'states':([0],[]),
                     'open':([2],[]), 'close':([2],[]),
-                    'get':([2],[]), 'set':([5,6],[]),
-                    'f2p':([2],[1]), 'p2f':([2],[]),
-                    'servo':([3],[2]), 'servoset':([0,2,3],[]),
-                    'pwm':([3,4],[2])}
+                    'pwm':([2,3,4],[2,3]), 'pwmfreq':([0,1],[0]),
+                    'servo':([3],[2]), 'servoset':([0,2,3],[0,1,2]),}
         cmd = cmdline[0]
         args = [] if len(cmdline) == 1 else cmdline[1:]
         #print('{}({})'.format(cmd, '' if len(args) == 0 else ', '.join(args)))  # DEBUG
@@ -360,29 +373,6 @@ class pypwm_client:
     def close(self, chip, timer):
         return self._send('close {} {}'.format(chip, timer))
 
-    def get(self, chip, timer):
-        ret = self._send('get {} {}'.format(chip, timer))
-        if type(ret) == tuple:
-            ret = self._pwmify(ret)
-        return ret
-
-    def set(self, chip, timer, enable=None, pwm=None, polarity=None):
-        if pwm is None:
-            period = duty = None
-        else:
-            try:
-                period, duty = pwm
-            except Exception as e:
-                return self._print('{}: error: pwm tuple ({}) incorrect: {}'.format(__name__, pwm, e))
-        return self._send('set {} {} {} {} {} {}'
-            .format(chip, timer, enable, period, duty, polarity))
-
-    def f2p(self, freq, factor):
-        return self._send('f2p {} {}'.format(freq, factor))
-
-    def p2f(self, period, duty):
-        return self._send('p2f {} {}'.format(period, duty))
-
 if __name__ == "__main__":
     '''
         Commandline Client
@@ -395,8 +385,11 @@ if __name__ == "__main__":
         states
         open <chip> <timer>
         close <chip> <timer>
-        set <chip> <timer> <enable> <period> <duty_cycle> <polarity>
-        get <chip> <timer>
+        pwm <chip> <timer> [<pwm factor> [<frequency>]]
+        pwmfreq [<frequency>]
+        servo <chip> <timer> <servo factor>
+        servoset [<min period> <max period> [<interval>]]
+        info
 
     'server' starts a server on {2}.
     - needs to run as root, see the main documentation for more
@@ -406,45 +399,32 @@ if __name__ == "__main__":
 
     <chip> and <timer> are integers
         - PWM timers are organised by chip, then timer index on the chip
-    <enable> is a boolean, 0 or 1, output is undefined when disabled(0)
-    <period> is an integer, the total period of pwm cycle (nanoseconds)
-    <duty_cycle> is an integer, the pulse time within each cycle (nanoseconds)
-    <polarity> defines the initial state (high/low) at start of pulse
+    ??? <enable> is a boolean, 0 or 1, output is undefined when disabled(0)
+    ??? <period> is an integer, the total period of pwm cycle (nanoseconds)
+    ??? <duty_cycle> is an integer, the pulse time within each cycle (nanoseconds)
 
     These are:
-
-    'open' and 'close' export and unexport timer nodes.
-    - To access a timer's status and settings the timer node must first
-      be exported
-    - Timers continue to run even when unexported
 
     'states' lists the available pwm chips, timers, and their status.
     - If a node entry is unexported it is shown as 'None'
     - Exported entries are a list of the parameters (see 'get', below)
       followed by the timer's node path in the /sys/class/pwm/ tree
 
-    'get' returns 'None' if the timer is not exported, otherwise it will
-    return four numeric values: <enable> <period> <duty_cycle> <polarity>
+    'open' and 'close' export and unexport timer nodes.
+    - To access a timer's status and settings the timer node must first
+      be exported
+    - Timers continue to run even when unexported
 
-    'set' will change an exported nodes settings with the supplied values.
-    - enable and polarity are boolean values, 0 or 1
-    - Attempting to set the enable or polarity states will fail unless
-      a valid period (non zero) is supplied or was previously set
-    - The duty_cycle cannot exceed the period
-    - Set operations are logged to the console, but not to disk logfiles
+    'pwm' sets the timer to a pwm factor and optional frequency
+    - The factor is a float between 0 and 1 representing the 'on' time ratio
+    - Frequency will be set to the 'pwmfreq' default if not specified
+    - If called with no factor specified it will return a tuple with floats
+      (frequency, factor), read from the current pin status
 
-    'f2p' converts two arguments, a frequency + factor to a
-    period + duty_cycle as used by the 'set' command above.
-    - Frequency is an interger, in Hz
-    - Factor is a float, 0-1, giving the % 'on time' for the signal.
-    - Returns the period and duty_cycle in nanoseconds
+    'info' returns a tuple with server details:
+      ('version', pid, uid, gid, '<syspath>')
 
-    'p2f' is the reverse of 'f2p' above, giving a frequency + factor
-    from the period + duty_cycle values returned by the 'get' or 'states' commands.
-    - Period and duration arguments are integers in nanoseconds.
-    - Returns the frequency in Hz and factor as a float between 0 and 1
-
-    Options (currently only applies to server):
+    Option (currently only applies to server):
     --verbose enables logging of 'set' events
 
     Homepage: https://github.com/easytarget/pyPWMd
