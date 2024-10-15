@@ -14,7 +14,7 @@ import atexit
 
 # Some housekeeping
 name = path.basename(__file__)
-version = '0.2'
+version = '1.0-dev'
 
 # Define the socket
 _sockdir = '/run/pwm'
@@ -197,6 +197,24 @@ class pypwm_server:
         factor = round(duty / period, 3)
         return freq, factor
 
+    def _pwm(self, chip, timer, factor = None, freq = None):
+        if factor is None:
+            state = self._get(chip, timer)
+            if state is None:
+                return None
+            else:
+                f, r = self._p2f(state[1],state[2])
+                return (round(1 - r, 3) if state[3] == 'inversed' else r, f)
+        factor = float(max(0,min(1,factor)))
+        freq = self.pfreq if freq is None else float(freq)
+        return self._set(chip, timer, 1, *self._f2p(freq, factor))
+
+    def _pwmfreq(self, freq = None):
+        if freq is None:
+            return self.pfreq
+        self.pfreq = freq
+        return True
+
     def _servo(self, chip, timer, factor):
         factor = max(0,min(1,factor))
         return 'SERVO: {} {} {}'.format(chip, timer, factor)
@@ -207,25 +225,10 @@ class pypwm_server:
         self.smin = self.smin if minpulse is None else float(minpulse)
         self.smax = self.smax if maxpulse is None else float(maxpulse)
         self.speriod = self.speriod if period is None else float(period)
-        return 'SERVOSET: {} {} {}'.format(self.smin, self.smax, self.speriod)
+        return True
 
-    def _pwm(self, chip, timer, factor = None, freq = None):
-        if factor is None:
-            state = self._get(chip, timer)
-            if state is None:
-                return None
-            else:
-                f, r = self._p2f(state[1],state[2])
-                return (f, 1 - r if state[3] == 'inversed' else r)
-        factor = float(max(0,min(1,factor)))
-        freq = self.pfreq if freq is None else float(freq)
-        return 'PWM: {} {} {} {}'.format(chip, timer, factor, freq)
-
-    def _pwmfreq(self, freq = None):
-        if freq is None:
-            return self.pfreq
-        self.pfreq = freq
-        return 'PWMFREQ: {}'.format(self.pfreq)
+    def _disable(self, chip, timer):
+        return self._set(chip, timer, 0, None, None)
 
     def server(self):
         # Clean any existing socket on startup (or error)
@@ -285,7 +288,8 @@ class pypwm_server:
         cmdset = {  'info':([1],[]), 'states':([0],[]),
                     'open':([2],[]), 'close':([2],[]),
                     'pwm':([2,3,4],[2,3]), 'pwmfreq':([0,1],[0]),
-                    'servo':([3],[2]), 'servoset':([0,2,3],[0,1,2]),}
+                    'servo':([3],[2]), 'servoset':([0,2,3],[0,1,2]),
+                    'disable':([2],[]),}
         cmd = cmdline[0]
         args = [] if len(cmdline) == 1 else cmdline[1:]
         #print('{}({})'.format(cmd, '' if len(args) == 0 else ', '.join(args)))  # DEBUG
