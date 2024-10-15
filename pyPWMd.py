@@ -40,6 +40,10 @@ class pypwm_server:
         self._chipbase = 'pwmchip'
         self._polarities = ['normal', 'inversed']
 
+        self.dfreq = 1000    # pwm default, hz
+        self.speriod = 0.02  # servo default pulse interval (seconds)
+        self.smin = 0.05     # servo default min pulse (seconds)
+        self.smax = 0.15     # servo default max pulse (seconds)
         # initialise and check logfile? disable file logging if n/a
         self._log('')
         self._log('PWM server v{} starting'.format(version))
@@ -195,14 +199,18 @@ class pypwm_server:
         factor = max(0,min(1,factor))
         return 'SERVO: {} {} {}'.format(chip, timer, factor)
 
-    def _servoset(self, minpulse=None, maxpulse=None, period = int(2e7)):
-        if minpulse is None and maxpulse is None:
-            return ['Defaults']
-        return 'SERVOSET: {} {} {}'.format(minpulse, maxpulse, period)
+    def _servoset(self, minpulse=None, maxpulse=None, period = None):
+        if minpulse is None and maxpulse is None and period is None:
+            return [self.smin, self.smax, self.speriod]
+        self.smin = self.smin if minpulse is None else minpulse
+        self.smax = self.smax if maxpulse is None else maxpulse
+        self.speriod = self.speriod if period is None else period
+        return 'SERVOSET: {} {} {}'.format(self.smin, self.smax, self.speriod)
 
-    def _pwm(self, chip, timer, factor, freq = 1000):
-        factor = max(0,min(1,factor))
-        return 'PWM: {} {} {} {}'.format(chip, timer, factor, freq)
+    def _pwm(self, chip, timer, factor, freq = None):
+        factor = float(max(0,min(1,factor)))
+        self.dfreq = self.dfreq if freq is None else freq
+        return 'PWM: {} {} {} {}'.format(chip, timer, factor, self.dfreq)
 
     def server(self):
         # Clean any existing socket on startup (or error)
