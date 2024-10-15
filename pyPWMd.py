@@ -131,10 +131,9 @@ class pypwm_server:
             if duty > period:
                 return self._log('error: cannot set duty={} greater than period={}'.format(duty, period))
             if state[1] != period:
-                if state[1] > 0:
-                    # if period already has a value, set duty=0 before it is changed
-                    setprop(node, 'duty_cycle', 0)
-                    state[2] = 0
+                # always set duty=0 before frequency is changed (may fail on initial access)
+                setprop(node, 'duty_cycle', 0)
+                state[2] = 0
                 setprop(node, 'period', period)
             if state[2] != duty:
                 setprop(node, 'duty_cycle', duty)
@@ -221,17 +220,17 @@ class pypwm_server:
             with Listener(self.sock, authkey=auth) as listener:
                 self._log('Listening on: ' + listener.address)
                 # Now loop forever while listening and responding to socket
-                self.running = True
+                self.running = True  # can be forced false to kill server
                 try:
                     while self.running:
-                        self.running = self._listen(listener)
+                        self._listen(listener)
                 except Exception as e:
-                    self._log('exiting:\n{}'.format(e))
                     self.running = False
+                    self._log('exiting:\n{}'.format(e))
         except FileNotFoundError as e:
             self._log('error: failed to create socket at {}:\n{}'.format(self.sock,e))
         except Exception as e:
-            self._log('error: failed to start server\n{}'.format(e))
+            self._log('error: failed to start server:\n{}'.format(e))
 
     def _listen(self,listener):
         try:
@@ -241,22 +240,22 @@ class pypwm_server:
                 except EOFError:
                     if self._verbose:
                         self._log('warning: null connection on socket')
-                    return True
+                    return
                 except Exception as e:
                     if self._verbose:
-                        self._log('warning: recieve failure on socket: {}'.format(e))
-                    return True
+                        self._log('warning: recieve failure on socket:\n{}'.format(e))
+                    return
                 cmdline = recieved.strip().split(' ')
                 #self._log('Recieved: {}'.format(cmdline))  # debug
                 conn.send(self._process(cmdline))
-            return True
-        except AuthenticationError as e:
+        except AuthenticationError:
             if self._verbose:
-                self._log('warning: authentication error on socket: {}'.format(e))
-            return True
+                self._log('warning: authentication error on socket')
+        except ConnectionResetError:
+            if self._verbose:
+                self._log('warning: connection reset on socket')
         except Exception as e:
-            self._log('error: listner failed on socket\n{}'.format(e))
-            return False
+            self._log('error: listner failed on socket:\n{}'.format(e))
 
     def _process(self, cmdline):
         # 'command':([possible argument lengths],[arguments that are floats])
