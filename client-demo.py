@@ -17,7 +17,7 @@ from atexit import register
      the gpio pwm chip and timer respectively
 '''
 chip = 0
-timer = 2
+timer = 0
 
 # If we opened the timer, close it again on exit.
 def clean_exit():
