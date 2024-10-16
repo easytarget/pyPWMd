@@ -39,7 +39,7 @@ if pwm.states()[str(chip)][timer] is None:
 power = 0
 step = 0.1
 while True:
-    pwm.set(chip, timer, 1, pwm.f2p(5000, power), 0)
+    pwm.pwm(chip, timer, power)
     power = round(min(max(power + step, 0),1),3)
     step = -step if power in [0,1] else step
     print('{}'.format('.' if power != 0 else '.\n'), end='', flush=True)
