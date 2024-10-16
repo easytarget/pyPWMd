@@ -22,9 +22,9 @@ pwmtimerctl open $chip $timer
 echo "Press ctrl-c to exit."
 # A simple fader
 while true ; do
-    for duty in 60 120 600 1200 6000 10000 6000 1200 600 120 60 0 ; do
+    for power in 0.1 0.3 0.6 1 0.6 0.3 0.1 0 ; do
         echo -n "."
-        pwmtimerctl set $chip $timer 1 10000 $duty 0
+        pwmtimerctl pwm $chip $timer $power
         sleep 0.5
     done
     echo
