@@ -200,7 +200,7 @@ class pypwm_server:
     def _pwm(self, chip, timer, factor = None, freq = None):
         if factor is None:
             state = self._get(chip, timer)
-            if state is None:
+            if state is None or state[0] == 0:
                 return None
             else:
                 f, r = self._p2f(state[1],state[2])
@@ -376,6 +376,27 @@ class pypwm_client:
 
     def close(self, chip, timer):
         return self._send('close {} {}'.format(chip, timer))
+
+    def pwm(self, chip, timer, factor = None, freq = None):
+        if factor is None:
+            factor = freq = ''
+        elif freq is None:
+            freq = ''
+        return self._send('pwm {} {} {} {}'.format(chip, timer, factor, freq))
+
+    def pwmfreq(self, freq = None):
+        return self._send('pwmfreq {}'.format('' if freq is None else freq))
+
+    def servo(self, chip, timer, factor):
+        return self._send('servo {} {} {}'.format(chip, timer, factor))
+
+    def servoset(self, minpulse=None, maxpulse=None, period = None):
+        cur = self._send('servoset')
+        print(cur)
+
+    def disable(self, chip, timer):
+        return self._send('disable {} {}'.format(chip, timer))
+
 
 if __name__ == "__main__":
     '''
