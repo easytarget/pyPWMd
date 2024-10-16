@@ -40,10 +40,10 @@ class pypwm_server:
         self._chipbase = 'pwmchip'
 
         # sensible defaults for pwm and servo
-        self.pfreq = 1000    # pwm default, hz
-        self.speriod = 0.02  # servo default pulse interval (float, seconds)
-        self.smin = 0.0006   # servo default min pulse (float, seconds)
-        self.smax = 0.0024   # servo default max pulse (float, seconds)
+        self.pfreq = 1000   # pwm default, (float, Hz)
+        self.sint = 0.02    # servo default pulse interval (float, seconds)
+        self.smin = 0.0006  # servo default min pulse (float, seconds)
+        self.smax = 0.0024  # servo default max pulse (float, seconds)
 
         # initialise and check logfile? disable file logging if n/a
         self._log('')
@@ -219,12 +219,12 @@ class pypwm_server:
         factor = max(0,min(1,factor))
         return 'SERVO: {} {} {}'.format(chip, timer, factor)
 
-    def _servoset(self, minpulse=None, maxpulse=None, period = None):
-        if minpulse is None and maxpulse is None and period is None:
-            return (self.smin, self.smax, self.speriod)
+    def _servoset(self, minpulse=None, maxpulse=None, interval = None):
+        if minpulse is None and maxpulse is None and interval is None:
+            return (self.smin, self.smax, self.sint)
         self.smin = self.smin if minpulse is None else float(minpulse)
         self.smax = self.smax if maxpulse is None else float(maxpulse)
-        self.speriod = self.speriod if period is None else float(period)
+        self.sint = self.sint if interval is None else float(interval)
         return True
 
     def _disable(self, chip, timer):
@@ -390,9 +390,14 @@ class pypwm_client:
     def servo(self, chip, timer, factor):
         return self._send('servo {} {} {}'.format(chip, timer, factor))
 
-    def servoset(self, minpulse=None, maxpulse=None, period = None):
+    def servoset(self, minpulse=None, maxpulse=None, interval = None):
         cur = self._send('servoset')
-        print(cur)
+        if minpulse is None and maxpulse is None and interval is None:
+            return cur
+        minpulse = cur[0] if minpulse is None else minpulse
+        maxpulse = cur[1] if maxpulse is None else maxpulse
+        interval = cur[2] if interval is None else interval
+        return self._send('servoset {} {} {}'.format(minpulse, maxpulse, interval))
 
     def disable(self, chip, timer):
         return self._send('disable {} {}'.format(chip, timer))
