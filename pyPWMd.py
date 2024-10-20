@@ -96,7 +96,7 @@ class pypwm_server:
         return enable, period, duty, polarity
 
     def _info(self,client):
-        self._log('client {} sent info request'.format(client))
+        self._log('info: client {} sent info request'.format(client))
         return [version, getpid(), getuid(), getgid(), self._sysbase]
 
     def _states(self):
@@ -151,7 +151,7 @@ class pypwm_server:
             setprop(node, 'enable', 1)
         # do not log to disk unless requested (fills disk and causes extra load)
         if self._verbose:
-            self._log('set: {} = {} '.format(node, list(self._gettimer(node))))
+            self._log('info: set {} = {}'.format(node, list(self._gettimer(node))))
         return True
 
     def _open(self, chip, timer):
@@ -166,7 +166,7 @@ class pypwm_server:
         if not path.exists(node + '/pwm' + str(timer)):
             return self._log('error: failed to create {}/pwm'.format(node))
         else:
-            self._log('opened: {}/pwm{}'.format(node, timer))
+            self._log('info: opened: {}/pwm{}'.format(node, timer))
             return True
 
     def _close(self, chip, timer):
@@ -181,7 +181,7 @@ class pypwm_server:
         if path.exists(node + '/pwm' + str(timer)):
             return self._log('error: failed to destroy {}/pwm'.format(node))
         else:
-            self._log('closed: {}/pwm{}'.format(node, timer))
+            self._log('info: closed: {}/pwm{}'.format(node, timer))
             return True
 
     def _f2p(self, freq, factor):
@@ -214,6 +214,8 @@ class pypwm_server:
         if freq is None:
             return self.pfreq
         self.pfreq = freq
+        if self._verbose:
+            self._log('info: pwm default frequency set to {}'.format(freq))
         return True
 
     def _servo(self, chip, timer, factor):
@@ -239,6 +241,8 @@ class pypwm_server:
         return True
 
     def _disable(self, chip, timer):
+        if self._verbose:
+            self._log('info: disabling {} {}'.format(chip, timer))
         return self._set(chip, timer, 0, None, None)
 
     def server(self):
@@ -251,11 +255,11 @@ class pypwm_server:
                 print(e)
                 print('Cannot start, is another instance running?')
                 return
-        self._log('Starting server: pid: {}, uid: {}, gid: {}'.format(
+        self._log('info: Starting server: pid: {}, uid: {}, gid: {}'.format(
             getpid(), getuid(), getgid()))
         try:
             with Listener(self.sock, authkey=auth) as listener:
-                self._log('Listening on: ' + listener.address)
+                self._log('info: Listening on: ' + listener.address)
                 # Now loop forever while listening and responding to socket
                 self.running = True  # can be forced false to kill server
                 try:
@@ -263,7 +267,7 @@ class pypwm_server:
                         self._listen(listener)
                 except Exception as e:
                     self.running = False
-                    self._log('exiting:\n{}'.format(e))
+                    self._log('info: server exiting:\n{}'.format(e))
         except FileNotFoundError as e:
             self._log('error: failed to create socket at {}:\n{}'.format(self.sock,e))
         except Exception as e:
