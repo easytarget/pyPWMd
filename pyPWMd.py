@@ -9,7 +9,6 @@ from os import path, remove, makedirs, chown, chmod, getuid, getgid, getpid
 from glob import glob
 from multiprocessing.connection import Listener, Client
 from multiprocessing import AuthenticationError
-from json import dumps, loads
 import atexit
 
 # Some housekeeping
@@ -74,10 +73,12 @@ class pypwm_server:
         return string
 
     def _chipscan(self):
-        #returns a dict with <path>:<number of pwms>
+        #returns a numerically sorted dict with <path>:<number of pwms>
         base = '{}/{}'.format(self._sysbase,self._chipbase)
+        chiplist = glob('{}*'.format(base))
+        chiplist = sorted(chiplist, key=lambda x:float(findall("(\d+)",x)[0]))
         chips = {}
-        for chip in glob('{}*'.format(base)):
+        for chip in chiplist:
             with open(chip + '/npwm','r') as npwm:
                 chips[chip] = int(npwm.read())
         return chips
@@ -498,7 +499,6 @@ if __name__ == "__main__":
         try:
             with Client(socket, authkey=auth) as conn:
                 conn.send(' '.join(cmdline))
-                # timeout here.. ?
                 reply = conn.recv()
         except AuthenticationError as e:
             reply = 'error: authentication failed: {}'.format(e)
