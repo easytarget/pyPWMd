@@ -7,13 +7,14 @@ from time import ctime
 from sys import argv, exit
 from os import path, remove, makedirs, chown, chmod, getuid, getgid, getpid
 from glob import glob
+from re import findall
 from multiprocessing.connection import Listener, Client
 from multiprocessing import AuthenticationError
 import atexit
 
 # Some housekeeping
 name = path.basename(__file__)
-version = '1.0-dev'
+version = '1.0'
 
 # Define the socket
 _sockdir = '/run/pwm'
@@ -42,11 +43,11 @@ class pypwm_server:
         self.pfreq = 1000   # pwm default, (float, Hz)
         self.sint = 0.02    # servo default pulse interval (float, seconds)
         self.smin = 0.0006  # servo default min pulse (float, seconds)
-        self.smax = 0.0024  # servo default max pulse (float, seconds)
+        self.smax = 0.0023  # servo default max pulse (float, seconds)
 
         # initialise and check logfile? disable file logging if n/a
         self._log('')
-        self._log('PWM server v{} starting'.format(version))
+        self._log('PWM server v{} init'.format(version))
         if logfile is not None:
             self._log('Logging to: {}{}'.format(logfile,
                 ' (verbose)' if verbose else ''))
@@ -421,9 +422,9 @@ if __name__ == "__main__":
     '''
 
     usage = '''Usage: v{0}
-    {1} command <options> [--verbose]
+    {1} command <options>
     where 'command' is one of:
-        server [<logfile>]
+        server [<logfile>] [--verbose]
         states
         open <chip> <timer>
         close <chip> <timer>
@@ -431,36 +432,61 @@ if __name__ == "__main__":
         pwmfreq [<frequency>]
         servo <chip> <timer> <servo-factor>
         servoset [<min-period> <max-period> [<interval>]]
+        disable <chip> <timer>
         info
 
+    <chip> and <timer> are integers.
+    - PWM timers are organised by chip, then timer index on the chip.
+
     'server' starts a server on {2}.
-    - needs to run as root, see the main documentation for more
-    - an optional logfile or log directory can be supplied
-     adding the option '--verbose' enables extended logging
+    - needs to run as root, see the main documentation for more.
+    - an optional logfile or log directory can be supplied and
+      adding the option '--verbose' enables extended logging.
 
-    All other commands are sent to the server, all arguments are mandatory
-
-    <chip> and <timer> are integers
-        - PWM timers are organised by chip, then timer index on the chip
+    All other commands are sent to the server.
 
     'states' lists the available pwm chips, timers, and their status.
-    - If a node entry is unexported it is shown as 'None'
-    - Exported entries are a list of the parameters (see 'get', below)
-      followed by the timer's node path in the /sys/class/pwm/ tree
+    - If a node entry is unexported it is shown as 'None'.
+    - Exported entries are a list of the current parameters;
+      enabled, period, duty_cycle, polarity. Followed by the timer's
+      node path in the /sys/class/pwm/ tree, as per kernel pwm api docs.
 
     'open' and 'close' export and unexport timer nodes.
     - To access a timer's status and settings the timer node must first
-      be exported
-    - Timers continue to run even when unexported
+      be exported.
+    - Timers continue to run even when unexported.
 
-    'pwm' sets the timer to a pwm factor and optional frequency
-    - The factor is a float between 0 and 1 representing the 'on' time ratio
-    - If called with no factor specified it will return a tuple with
-      (frequency, factor), read from the current pin status
+    'pwm' enables and sets the timer to a pwm factor.
+    - The factor is a float between 0 and 1 giving the 'on' time ratio.
+    - The frequency is taken from the current pwmfreq setting.
+    - If called with no factor specified it will return the current
+      (frequency, factor) read from the pin status.
 
-    'info' returns a tuple with server details:
+    'pwmfreq' shows or sets the default PWM frequency in Hz.
+    - Default is 1000 (1KHz).
+    - If called with no argument it returns the current setting.
+
+    'servo' enables and sets the timer to output servo pulses.
+    - The position is a float between 0 (min) and 1 (max) positions.
+
+    'servoset' shows or sets the servo timings and interval.
+    - The first two arguments are the minimum and maximum pulse width
+      times for the servo in seconds (floats).
+    - The third (optional) argument is the interval between pulses in
+      seconds (float).
+    - Default is 0.6ms and 2.3ms for minimum and maximum pulse width,
+      and 20ms for the interval. These are typical figures for small
+      hobby servo motors. Check datasheets and test for your motors as needed.
+    - If called with no argument it returns the current timings in seconds.
+
+    'disable' immediately disables the timer.
+    - This should be used as needed with the servo commands to stop the servo
+      after it has moved to position to avoid hunting and jittering.
+    - The kernel pwm api does not specify the output when disabled, typically
+      it defaults to high-impedance but you should test this.
+
+    'info' returns a tuple with server details.
       ('version', pid, uid, gid, '<syspath>')
-
 
     Homepage: https://github.com/easytarget/pyPWMd
     '''.format(version, name, socket).strip()
