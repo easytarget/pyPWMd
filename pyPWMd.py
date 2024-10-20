@@ -216,15 +216,25 @@ class pypwm_server:
         return True
 
     def _servo(self, chip, timer, factor):
-        factor = max(0,min(1,factor))
-        return 'SERVO: {} {} {}'.format(chip, timer, factor)
+        factor = float(max(0,min(1,factor)))
+        value = self.smin + ((self.smax - self.smin) * factor)
+        period = int(self.sint * basefreq)
+        duty_cycle = int(value * basefreq)
+        return self._set(chip, timer, 1, period, duty_cycle)
 
     def _servoset(self, minpulse=None, maxpulse=None, interval = None):
         if minpulse is None and maxpulse is None and interval is None:
             return (self.smin, self.smax, self.sint)
-        self.smin = self.smin if minpulse is None else float(minpulse)
-        self.smax = self.smax if maxpulse is None else float(maxpulse)
-        self.sint = self.sint if interval is None else float(interval)
+        smin = self.smin if minpulse is None else float(minpulse)
+        smax = self.smax if maxpulse is None else float(maxpulse)
+        sint = self.sint if interval is None else float(interval)
+        if smax > sint:
+            return 'error: maxpulse ({}) cannot be greater than interval ({})'.format(smax, sint)
+        if smin > smax:
+            return 'error: minpulse ({}) cannot be greater than maxpulse ({})'.format(smin, smax)
+        self.smin, self.smax, self.sint = smin, smax, sint
+        if self._verbose:
+            self._log('info: servo defaults set to {} {} {}'.format(smin, smax, sint))
         return True
 
     def _disable(self, chip, timer):
