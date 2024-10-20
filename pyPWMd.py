@@ -198,7 +198,7 @@ class pypwm_server:
         factor = round(duty / period, 3)
         return freq, factor
 
-    def _pwm(self, chip, timer, factor = None, freq = None):
+    def _pwm(self, chip, timer, factor = None):
         if factor is None:
             state = self._get(chip, timer)
             if state is None or state[0] == 0:
@@ -207,8 +207,7 @@ class pypwm_server:
                 f, r = self._p2f(state[1],state[2])
                 return (round(1 - r, 3) if state[3] == 'inversed' else r, f)
         factor = float(max(0,min(1,factor)))
-        freq = self.pfreq if freq is None else float(freq)
-        return self._set(chip, timer, 1, *self._f2p(freq, factor))
+        return self._set(chip, timer, 1, *self._f2p(self.pfreq, factor))
 
     def _pwmfreq(self, freq = None):
         if freq is None:
@@ -302,7 +301,7 @@ class pypwm_server:
         # 'command':([possible argument lengths],[arguments that are floats])
         cmdset = {  'info':([1],[]), 'states':([0],[]),
                     'open':([2],[]), 'close':([2],[]),
-                    'pwm':([2,3,4],[2,3]), 'pwmfreq':([0,1],[0]),
+                    'pwm':([2,3],[2]), 'pwmfreq':([0,1],[0]),
                     'servo':([3],[2]), 'servoset':([0,2,3],[0,1,2]),
                     'disable':([2],[]),}
         cmd = cmdline[0]
@@ -392,12 +391,10 @@ class pypwm_client:
     def close(self, chip, timer):
         return self._send('close {} {}'.format(chip, timer))
 
-    def pwm(self, chip, timer, factor = None, freq = None):
+    def pwm(self, chip, timer, factor = None):
         if factor is None:
-            factor = freq = ''
-        elif freq is None:
-            freq = ''
-        return self._send('pwm {} {} {} {}'.format(chip, timer, factor, freq))
+            factor = ''
+        return self._send('pwm {} {} {}'.format(chip, timer, factor))
 
     def pwmfreq(self, freq = None):
         return self._send('pwmfreq {}'.format('' if freq is None else freq))
@@ -430,25 +427,21 @@ if __name__ == "__main__":
         states
         open <chip> <timer>
         close <chip> <timer>
-        pwm <chip> <timer> [<pwm factor> [<frequency>]]
+        pwm <chip> <timer> [<pwm-factor>]
         pwmfreq [<frequency>]
-        servo <chip> <timer> <servo factor>
-        servoset [<min period> <max period> [<interval>]]
+        servo <chip> <timer> <servo-factor>
+        servoset [<min-period> <max-period> [<interval>]]
         info
 
     'server' starts a server on {2}.
     - needs to run as root, see the main documentation for more
     - an optional logfile or log directory can be supplied
+     adding the option '--verbose' enables extended logging
 
     All other commands are sent to the server, all arguments are mandatory
 
     <chip> and <timer> are integers
         - PWM timers are organised by chip, then timer index on the chip
-    ??? <enable> is a boolean, 0 or 1, output is undefined when disabled(0)
-    ??? <period> is an integer, the total period of pwm cycle (nanoseconds)
-    ??? <duty_cycle> is an integer, the pulse time within each cycle (nanoseconds)
-
-    These are:
 
     'states' lists the available pwm chips, timers, and their status.
     - If a node entry is unexported it is shown as 'None'
@@ -462,15 +455,12 @@ if __name__ == "__main__":
 
     'pwm' sets the timer to a pwm factor and optional frequency
     - The factor is a float between 0 and 1 representing the 'on' time ratio
-    - Frequency will be set to the 'pwmfreq' default if not specified
-    - If called with no factor specified it will return a tuple with floats
+    - If called with no factor specified it will return a tuple with
       (frequency, factor), read from the current pin status
 
     'info' returns a tuple with server details:
       ('version', pid, uid, gid, '<syspath>')
 
-    Option (currently only applies to server):
-    --verbose enables logging of 'set' events
 
     Homepage: https://github.com/easytarget/pyPWMd
     '''.format(version, name, socket).strip()
