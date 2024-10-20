@@ -19,16 +19,15 @@ from atexit import register
 chip = 0
 timer = 0
 
-# If we opened the timer, close it again on exit.
 def clean_exit(opened):
     pwm.disable(chip, timer)
+    # If we opened the timer, close it again on exit.
     if opened:
         print('Closing chip {}, timer {}'.format(chip,timer))
         pwm.close(chip, timer)
 
 # Generate a client object
 pwm = pypwm_client(verbose=True)
-
 if pwm.connected == False:
     print('No PWM server, exiting..')
     exit()

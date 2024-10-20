@@ -20,15 +20,14 @@ chip = 0
 timer = 0
 
 def clean_exit(opened):
-    # If we opened the timer, close it again on exit.
     pwm.disable(chip, timer)
+    # If we opened the timer, close it again on exit.
     if opened:
         print('Closing chip {}, timer {}'.format(chip,timer))
         pwm.close(chip, timer)
 
 # Generate a client object
 pwm = pypwm_client()
-
 if pwm.connected == False:
     print('No PWM server, exiting..')
     exit()
