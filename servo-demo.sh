@@ -14,7 +14,7 @@
 #     the gpio pwm chip and timer respectively
 #
 chip=0
-timer=1
+timer=0
 
 # Open the timer as necesscary
 echo "Opening chip $chip, timer $timer"
