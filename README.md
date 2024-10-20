@@ -264,65 +264,72 @@ todo.. easy. just cd.. then git pull, then restart service
 -----------------------------
 # Commandline help reference
 ```console
-$ ./pyPWMd.py help
+$ pwmtimerctl help
 Usage: v1.0
-    pyPWMd.py command <options> [--verbose]
+    pwmtimerctl command <options>
     where 'command' is one of:
-        server [<logfile>]
+        server [<logfile>] [--verbose]
         states
         open <chip> <timer>
         close <chip> <timer>
-        set <chip> <timer> <enable> <period> <duty_cycle> <polarity>
-        get <chip> <timer>
+        pwm <chip> <timer> [<pwm-factor>]
+        pwmfreq [<frequency>]
+        servo <chip> <timer> <servo-factor>
+        servoset [<min-period> <max-period> [<interval>]]
+        disable <chip> <timer>
+        info
+
+    <chip> and <timer> are integers.
+    - PWM timers are organised by chip, then timer index on the chip.
 
     'server' starts a server on /run/pwm/pyPWMd.socket.
-    - needs to run as root, see the main documentation for more
-    - an optional logfile or log directory can be supplied
+    - needs to run as root, see the main documentation for more.
+    - an optional logfile or log directory can be supplied and
+      adding the option '--verbose' enables extended logging.
 
-    All other commands are sent to the server, all arguments are mandatory
+    All other commands are sent to the server.
 
-    <chip> and <timer> are integers
-        - PWM timers are organised by chip, then timer index on the chip
-    <enable> is a boolean, 0 or 1, output is undefined when disabled(0)
-    <period> is an integer, the total period of pwm cycle (nanoseconds)
-    <duty_cycle> is an integer, the pulse time within each cycle (nanoseconds)
-    <polarity> defines the initial state (high/low) at start of pulse
-
-    These are:
+    'states' lists the available pwm chips, timers, and their status.
+    - If a node entry is unexported it is shown as 'None'.
+    - Exported entries are a list of the current parameters;
+      enabled, period, duty_cycle, polarity. Followed by the timer's
+      node path in the /sys/class/pwm/ tree, as per kernel pwm api docs.
 
     'open' and 'close' export and unexport timer nodes.
     - To access a timer's status and settings the timer node must first
-      be exported
-    - Timers continue to run even when unexported
+      be exported.
+    - Timers continue to run even when unexported.
 
-    'states' lists the available pwm chips, timers, and their status.
-    - If a node entry is unexported it is shown as 'None'
-    - Exported entries are a list of the parameters (see 'get', below)
-      followed by the timer's node path in the /sys/class/pwm/ tree
+    'pwm' enables and sets the timer to a pwm factor.
+    - The factor is a float between 0 and 1 giving the 'on' time ratio.
+    - The frequency is taken from the current pwmfreq setting.
+    - If called with no factor specified it will return the current
+      (frequency, factor) read from the pin status.
 
-    'get' returns 'None' if the timer is not exported, otherwise it will
-    return four numeric values: <enable> <period> <duty_cycle> <polarity>
+    'pwmfreq' shows or sets the default PWM frequency in Hz.
+    - Default is 1000 (1KHz).
+    - If called with no argument it returns the current setting.
 
-    'set' will change an exported nodes settings with the supplied values.
-    - enable and polarity are boolean values, 0 or 1
-    - Attempting to set the enable or polarity states will fail unless
-      a valid period (non zero) is supplied or was previously set
-    - The duty_cycle cannot exceed the period
-    - Set operations are logged to the console, but not to disk logfiles
+    'servo' enables and sets the timer to output servo pulses.
+    - The position is a float between 0 (min) and 1 (max) positions.
 
-    'f2p' converts two arguments, a frequency + power_ratio to a
-    period + duty_cycle as used by the 'set' command above.
-    - Frequency is an interger, in Hz
-    - Power_ratio is ao float, 0-1, giving the % 'on time' for the signal.
-    - Returns the period and duty_cycle in nanoseconds
+    'servoset' shows or sets the servo timings and interval.
+    - The first two arguments are the minimum and maximum pulse width
+      times for the servo in seconds (floats).
+    - The third (optional) argument is the interval between pulses in
+      seconds (float).
+    - Default is 0.6ms and 2.3ms for minimum and maximum pulse width,
+      and 20ms for the interval. These are typical figures for small
+      hobby servo motors. Check datasheets and test for your motors as needed.
+    - If called with no argument it returns the current timings in seconds.
 
-    'p2f' is the reverse of 'f2p' above, giving a frequency + power_ratio
-    from the period + duty_cycle values returned by the 'get' or 'states' commands.
-    - Period and duration arguments are integers in nanoseconds.
-    - Returns the frequency in Hz and power_ratio as a float between 0 and 1
+    'disable' immediately disables the timer.
+    - This should be used as needed with the servo commands to stop the servo
+      after it has moved to position to avoid hunting and jittering.
+    - The kernel pwm api does not specify the output when disabled, typically
+      it defaults to high-impedance but you should test this.
 
-    Options (currently only applies to server):
-    --verbose enables logging of 'set' events
+    'info' returns a tuple with server details.
+      ('version', pid, uid, gid, '<syspath>')
 
     Homepage: https://github.com/easytarget/pyPWMd
-```
