@@ -1,3 +1,10 @@
+# LEGACY BRANCH!
+## Holds a copy of the v0.x code which controls the timer directly.
+* **Kept here for any 'legacy' users..**
+* Frozen, I do not anticipate updating this unless major issues found by end users.
+* Supersceeded by `v1.x` which uses `pwm` and `servo` commands instead of `get` and `set`.for ease of use.
+
+
 # Python PWM Timer Control Daemon
 
 Hardware based **P**ulse **W**idth **M**odulation ([PWM](https://learn.sparkfun.com/tutorials/pulse-width-modulation/all)) is a common feature of modern Single Board Computers.
