@@ -368,22 +368,11 @@ class pypwm_client:
         self.connected = False
         return None
 
-    def _pwmify(self, timer):
-        p = timer[1]
-        d = timer[2]
-        return (timer[0], (p, d), timer[3])
-
     def info(self):
         return self._send('info {}'.format(getpid()))
 
     def states(self):
         states = self._send('states')
-        if type(states) != dict:
-            return states
-        for chip in states.keys():
-            for timer in states[chip].keys():
-                if states[chip][timer] is not None:
-                    states[chip][timer] = self._pwmify(states[chip][timer])
         return states
 
     def open(self, chip, timer):
@@ -393,9 +382,7 @@ class pypwm_client:
         return self._send('close {} {}'.format(chip, timer))
 
     def pwm(self, chip, timer, factor = None):
-        if factor is None:
-            factor = ''
-        return self._send('pwm {} {} {}'.format(chip, timer, factor))
+        return self._send('pwm {} {} {}'.format(chip, timer, '' if factor is None else factor))
 
     def pwmfreq(self, freq = None):
         return self._send('pwmfreq {}'.format('' if freq is None else freq))
