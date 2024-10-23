@@ -26,13 +26,13 @@ def clean_exit(opened):
         print('Closing chip {}, timer {}'.format(chip,timer))
         pwm.close(chip, timer)
 
-# Generate a client object
+# Generate a client object.
 pwm = pypwm_client()
 if pwm.connected == False:
     print('No PWM server, exiting..')
     exit()
 
-# Open the timer if necesscary, register a close event.
+# Open the timer if necesscary, always register a close event.
 if pwm.states()[str(chip)][timer] is None:
     print('Opening chip {}, timer {}'.format(chip,timer))
     pwm.open(chip, timer)
@@ -41,7 +41,7 @@ else:
     print('Using chip {}, timer {}'.format(chip,timer))
     register(clean_exit, False)
 
-# Main loop runs forever and fades timer up/down.
+# Main loop runs forever and swings servo left/right.
 steps = [0.5,0,0.5,1]
 while True:
     for position in steps:
