@@ -57,22 +57,23 @@ Once a node is open you can read and set properties; for each timer there are fo
 The pyPWMd server is a front-end to the (legacy) sysFS interface; the kernel.org PWM API describes this in more detail:
 https://www.kernel.org/doc/html/latest/driver-api/pwm.html#using-pwms-with-the-sysfs-interface
 
-There are five basic commands provided by the clients;
+All the clients provide the same set of commands;
 * `open <chip> <timer>`
 * `close <chip> <timer>`
   * Open and Close timer nodes
-* `get <chip> <timer>`
-  * Gets the timer properties
-* `set <chip> <timer> <enable> <period> <duty_cycle> <polarity>`
-  * Sets the properties of the timer
-  * Note that *enable* and *polarity* cannot be set unless the *period* is valid (non-zero)
+* `pwm <chip> <timer> [<pwm-factor>]
+  * sets or gets the pwm 'factor' (ontime as a float between 0->1)
+* `pwmfreq [<frequency>]]
+  * sets or gets the pwm frequency (default 1KHz)
+* `servo <chip> <timer> [<servo-factor>]
+  * sets or gets the servo position as a 'factor' (float between 0->1)
+* `servoset [<min-period>, <max-period> [, <interval>]]`
+  * sets or gets servo minimum and maximum pulse periods, and optionally the pulse interval.
+  * specified in nanoseconds; defaults to: 0.6ms / 2.3ms for the min / max, 20ms between pulses.
+* `disable <chip> <timer>`
+  * Immediately disables the timer, useful with servos to stop jittering
 * `states`
   * Lists the *open*/*closed* state of all available PWM timers, if a timer is open it's properties are returned
-
-Additionally they have some helpers
-* `f2p` and `p2f`
-  * Converts a *frequency* & *power* (pwm ratio) pair of values to *period* and *duty_cycle*
-  * And vice versa.
 * `info`
   * Returns the *version*, *pid*, *uid*, *gid* and *sysfs root path* of the server
 
@@ -171,10 +172,7 @@ $ pwmtimerctl open 0 1
 Mon Sep 30 12:12:22 2024 :: opened: /sys/class/pwm/pwmchip0/pwm1
 $ pwmtimerctl states
 {'0': {0: None, 1: (0, (0, 0), 0)}}
-$ pwmtimerctl f2p 100000 0.5
-(10000, 5000)
-$ pwmtimerctl set 0 1 1 10000 5000 0
-Mon Sep 30 12:13:12 2024 :: set: /sys/class/pwm/pwmchip0/pwm1 = [1, 10000, 5000, 0]
+###############################################################################
 $ pwmtimerctl states
 {'0': {0: None, 1: (1, (10000, 5000), 0)}}
 ```
@@ -193,33 +191,10 @@ pypwm_client.close(chip, timer):
       Returns 'True' if the close was successful or node already closed
       or an error string on failure
 
-pypwm_client.get(chip, timer):
-      Returns the timer properties as a tuple, or an error string
-
-pypwm_client.set(chip, timer, enable=None, pwm=None, polarity=None):
-      'enable' is a bool, 0 or 1
-      'pwm' is a tuple:
-          pwm(period, duty_cycle)
-      'polarity' is 0 for 'normal' or 1 for 'inversed'.
-      The values are optional:
-      - If omitted the current value will be used
-      - This can cause errors, eg if 'enable' is set while 'pwm' is
-        still at it's default, unitialised, (0,0) setting
-      Returns 'True' on success, an error string on failure
+####################################################################################
 
 pypwm_client.states():
       Reads the /sys/class/pwm/ tree and returns the state map as a dict
-
-pypwm_client.f2p(freq, power):
-      'freq' is an integer
-      'power' is a float (0-1) giving the PWM 'on' time percentage
-      Returns a tuple (period, duty):
-        'period' and 'duty' are integers
-
-pypwm_client.p2f(period, duty):
-      'period' and 'duty' are integers
-      Returns a tuple (freq, power)
-        'freq' is an integer and 'power' is a float (max 3 decimals)
 
 pypwm_client.info():
       Returns a list with server details
@@ -248,10 +223,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 {'0': {0: None, 1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None}}
 >>> p.open(0,2)
 True
->>> p.get(0,2)
-(0, (1000, 1000), 0)
->>> p.set(0, 2, 0, p.f2p(5000, 0.5), 0)
-True
+########################################################################
 >>> p.states()
 {'0': {0: None, 1: None, 2: (0, (200000, 100000), 0), 3: None, 4: None, 5: None, 6: None, 7: None}}
 >>> p.close(0,2)
