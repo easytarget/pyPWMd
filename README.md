@@ -105,7 +105,7 @@ Once the server is running you can use `pwmtimerctl` on the commandline, or `imp
 Stop: Once you are done with the server; terminate it by killing the PID
 ```console
 $ pwmtimerctl info
-['0.1', 43146, 0, 0, '/sys/class/pwm']
+('0.1', 43146, 0, 0, '/sys/class/pwm')
 $ kill 43146
 [1]+  Terminated              sudo ./pyPWMd.py server
 # (could also do kill %1 since the server is backgrounded as #1)
@@ -258,7 +258,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 >>> import pyPWMd
 >>> pwm = pyPWMd.pypwm_client(verbose=True)
 >>> pwm.info()
-['1.0', 10352, 0, 115, '/sys/class/pwm']
+('1.0', 10352, 0, 115, '/sys/class/pwm')
 >>> pwm.states()
 {'0': {0: None, 1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None}}
 >>> pwm.open(0,2)
