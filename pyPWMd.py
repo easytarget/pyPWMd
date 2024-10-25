@@ -185,30 +185,30 @@ class pypwm_server:
             self._log('info: closed: {}/pwm{}'.format(node, timer))
             return True
 
-    def _f2p(self, freq, factor):
+    def _f2p(self, freq, ratio):
         if freq == 0:  # div by zero.
             return 0, 0
         period = int(basefreq / freq)
-        duty = int(period * factor)
+        duty = int(period * ratio)
         return period, duty
 
     def _p2f(self, period, duty):
         if period == 0:  # div by zero.
             return 0, 0
         freq = round(basefreq / period, 3)
-        factor = round(duty / period, 3)
-        return freq, factor
+        ratio = round(duty / period, 3)
+        return freq, ratio
 
-    def _pwm(self, chip, timer, factor = None):
-        if factor is None:
+    def _pwm(self, chip, timer, ratio = None):
+        if ratio is None:
             state = self._get(chip, timer)
             if state is None or state[0] == 0:
                 return None
             else:
                 f, r = self._p2f(state[1],state[2])
                 return round(1 - r, 3) if state[3] == 'inversed' else r, f
-        factor = float(max(0,min(1,factor)))
-        return self._set(chip, timer, 1, *self._f2p(self.pfreq, factor))
+        ratio = float(max(0, min(1, ratio)))
+        return self._set(chip, timer, 1, *self._f2p(self.pfreq, ratio))
 
     def _pwmfreq(self, freq = None):
         if freq is not None:
@@ -217,9 +217,9 @@ class pypwm_server:
                 self._log('info: pwm default frequency set to {}'.format(freq))
         return self.pfreq
 
-    def _servo(self, chip, timer, factor):
-        factor = float(max(0,min(1,factor)))
-        value = self.smin + ((self.smax - self.smin) * factor)
+    def _servo(self, chip, timer, ratio):
+        ratio = float(max(0, min(1, ratio)))
+        value = self.smin + ((self.smax - self.smin) * ratio)
         period = int(self.sint * basefreq)
         duty_cycle = int(value * basefreq)
         return self._set(chip, timer, 1, period, duty_cycle)
@@ -378,14 +378,14 @@ class pypwm_client:
     def close(self, chip, timer):
         return self._send('close {} {}'.format(chip, timer))
 
-    def pwm(self, chip, timer, factor = None):
-        return self._send('pwm {} {} {}'.format(chip, timer, '' if factor is None else factor))
+    def pwm(self, chip, timer, ratio = None):
+        return self._send('pwm {} {} {}'.format(chip, timer, '' if ratio is None else ratio))
 
     def pwmfreq(self, freq = None):
         return self._send('pwmfreq {}'.format('' if freq is None else freq))
 
-    def servo(self, chip, timer, factor):
-        return self._send('servo {} {} {}'.format(chip, timer, factor))
+    def servo(self, chip, timer, ratio):
+        return self._send('servo {} {} {}'.format(chip, timer, ratio))
 
     def servoset(self, minpulse=None, maxpulse=None, interval = None):
         cur = self._send('servoset')
@@ -412,9 +412,9 @@ if __name__ == "__main__":
         states
         open <chip> <timer>
         close <chip> <timer>
-        pwm <chip> <timer> [<pwm-factor>]
+        pwm <chip> <timer> [<pwm-ratio>]
         pwmfreq [<frequency>]
-        servo <chip> <timer> <servo-factor>
+        servo <chip> <timer> <servo-ratio>
         servoset [<min-period> <max-period> [<interval>]]
         disable <chip> <timer>
         info
@@ -440,11 +440,11 @@ if __name__ == "__main__":
       be exported.
     - Timers continue to run even when unexported.
 
-    'pwm' enables and sets the timer to a pwm factor.
-    - The factor is a float between 0 and 1 giving the 'on' time ratio.
+    'pwm' enables and sets the timer to a pwm ratio.
+    - The ratio is a float between 0 and 1 giving the 'on' time ratio.
     - The frequency is taken from the current pwmfreq setting.
-    - If called with no factor specified it will return the current
-      (frequency, factor) read from the pin status.
+    - If called with no ratio specified it will return the current
+      (frequency, ratio) read from the pin status.
 
     'pwmfreq' shows or sets the default PWM frequency in Hz.
     - Default is 1000 (1KHz).
