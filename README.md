@@ -61,11 +61,11 @@ All the clients provide the same set of commands;
 * `open <chip> <timer>`
 * `close <chip> <timer>`
   * Open and Close timer nodes
-* `pwm <chip> <timer> [<pwm-factor>]
+* `pwm <chip> <timer> [<pwm-factor>]`
   * sets or gets the pwm 'factor' (ontime as a float between 0->1)
-* `pwmfreq [<frequency>]]
+* `pwmfreq [<frequency>]]`
   * sets or gets the pwm frequency (default 1KHz)
-* `servo <chip> <timer> [<servo-factor>]
+* `servo <chip> <timer> [<servo-factor>]`
   * sets or gets the servo position as a 'factor' (float between 0->1)
 * `servoset [<min-period>, <max-period> [, <interval>]]`
   * sets or gets servo minimum and maximum pulse periods, and optionally the pulse interval.
