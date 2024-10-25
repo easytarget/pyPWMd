@@ -77,7 +77,7 @@ class pypwm_server:
         #returns a numerically sorted dict with <path>:<number of pwms>
         base = '{}/{}'.format(self._sysbase,self._chipbase)
         chiplist = glob('{}*'.format(base))
-        chiplist = sorted(chiplist, key=lambda x:float(findall("(\d+)",x)[0]))
+        chiplist = sorted(chiplist, key=lambda x:float(findall('(\\d+)',x)[0]))
         chips = {}
         for chip in chiplist:
             with open(chip + '/npwm','r') as npwm:
@@ -98,7 +98,7 @@ class pypwm_server:
 
     def _info(self,client):
         self._log('info: client {} sent info request'.format(client))
-        return [version, getpid(), getuid(), getgid(), self._sysbase]
+        return version, getpid(), getuid(), getgid(), self._sysbase
 
     def _states(self):
         pwms = {}
@@ -206,17 +206,16 @@ class pypwm_server:
                 return None
             else:
                 f, r = self._p2f(state[1],state[2])
-                return (round(1 - r, 3) if state[3] == 'inversed' else r, f)
+                return round(1 - r, 3) if state[3] == 'inversed' else r, f
         factor = float(max(0,min(1,factor)))
         return self._set(chip, timer, 1, *self._f2p(self.pfreq, factor))
 
     def _pwmfreq(self, freq = None):
-        if freq is None:
-            return self.pfreq
-        self.pfreq = freq
-        if self._verbose:
-            self._log('info: pwm default frequency set to {}'.format(freq))
-        return True
+        if freq is not None:
+            self.pfreq = freq
+            if self._verbose:
+                self._log('info: pwm default frequency set to {}'.format(freq))
+        return self.pfreq
 
     def _servo(self, chip, timer, factor):
         factor = float(max(0,min(1,factor)))
@@ -226,8 +225,6 @@ class pypwm_server:
         return self._set(chip, timer, 1, period, duty_cycle)
 
     def _servoset(self, minpulse=None, maxpulse=None, interval = None):
-        if minpulse is None and maxpulse is None and interval is None:
-            return (self.smin, self.smax, self.sint)
         smin = self.smin if minpulse is None else float(minpulse)
         smax = self.smax if maxpulse is None else float(maxpulse)
         sint = self.sint if interval is None else float(interval)
@@ -238,7 +235,7 @@ class pypwm_server:
         self.smin, self.smax, self.sint = smin, smax, sint
         if self._verbose:
             self._log('info: servo defaults set to {} {} {}'.format(smin, smax, sint))
-        return True
+        return self.smin, self.smax, self.sint
 
     def _disable(self, chip, timer):
         if self._verbose:
