@@ -208,14 +208,15 @@ pypwm_client.close(chip, timer):
       Returns 'True' if the close was successful or node already closed
       or an error string on failure
 
-pypwm_client.pwm(chip, timer, ratio=None):
-      Sets the PWM ontime according to `ratio`, uses the default frequency
+pypwm_client.pwm(chip, timer, ratio = None):
+      Sets the PWM ontime according to `ratio` (a float between 0 and 1)
+      Uses the default frequency as defined by `pwmfreq`
       Returns an error string if the value was not set
-      If `ratio` is None it will calculate and return the current value from the pin
+      If `ratio` is None it will calculate and return the current ratio and frequency from the pin
 
 pypwm_client.pwmfreq(chip, timer, frequency = None):
-      If a frequency (in Hz) is supplied it is set as the default PWM frequency
-      Returns the current value
+      If a frequency (float, in Hz) is supplied it is set as the default PWM frequency
+      Returns the (new) default value
 
 pypwm_client.servo(chip, timer, ratio):
       Sets the servo position ontime to `ratio`, uses the default servo timings
@@ -223,7 +224,7 @@ pypwm_client.servo(chip, timer, ratio):
 
 pypwm_client.servoset(chip, timer, min-period = None, max-period = None, Interval = None):
       Sets the default servo minimum and maximum pulse periods as required, plus pulse interval
-      Returns the current values in a list, or an error string if the new values are are non-sensical
+      Returns the (new) default values in a list, or an error string if the new values are are non-sensical
 
 pypwm_client.disable(chip, timer):
       Immediately disables the specified timer
@@ -251,19 +252,41 @@ $ ln -s /usr/local/lib/pyPWMd/pyPWMd.py .
 Here is an example of using the library on my MQ-Pro (8 pwm timers):
 * Also see the demo [client-demo.py](./client-demo.py).
 ```python
+owen@iris:~/py-pwmd$ python3
 Python 3.12.3 (main, Sep 11 2024, 14:17:37) [GCC 13.2.0] on linux
 Type "help", "copyright", "credits" or "license" for more information.
 >>> import pyPWMd
->>> p = pyPWMd.pypwm_client()
->>> p.states()
+>>> pwm = pyPWMd.pypwm_client(verbose=True)
+>>> pwm.info()
+['1.0', 10352, 0, 115, '/sys/class/pwm']
+>>> pwm.states()
 {'0': {0: None, 1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None}}
->>> p.open(0,2)
+>>> pwm.open(0,2)
 True
-########################################################################
->>> p.states()
-{'0': {0: None, 1: None, 2: (0, (200000, 100000), 0), 3: None, 4: None, 5: None, 6: None, 7: None}}
->>> p.close(0,2)
+>>> pwm.states()
+{'0': {0: None, 1: None, 2: (0, 0, 0, 'inversed'), 3: None, 4: None, 5: None, 6: None, 7: None}}
+>>> pwm.pwmfreq()
+1000
+>>> pwm.pwm(0, 2, 0.5)
 True
+>>> pwm.pwm(0, 2)
+(0.5, 1000.0)
+>>> pwm.pwmfreq(5000)
+5000.0
+>>> pwm.pwm(0, 2, 0.25)
+True
+>>> pwm.pwm(0, 2)
+(0.25, 5000.0)
+>>> pwm.states()
+{'0': {0: None, 1: None, 2: (1, 200000, 150000, 'inversed'), 3: None, 4: None, 5: None, 6: None, 7: None}}
+>>> pwm.disable(0, 2)
+True
+>>> pwm.states()
+{'0': {0: None, 1: None, 2: (0, 200000, 150000, 'inversed'), 3: None, 4: None, 5: None, 6: None, 7: None}}
+>>> pwm.close(0, 2)
+True
+>>> pwm.states()
+{'0': {0: None, 1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None}}
 ```
 
 ## Upgrading
