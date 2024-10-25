@@ -62,11 +62,11 @@ All the clients provide the same set of commands;
 * `close <chip> <timer>`
   * Open and Close timer nodes
 * `pwm <chip> <timer> [<pwm-ratio>]`
-  * sets or gets the pwm 'ratio' (ontime as a float between 0->1)
+  * sets or gets the pwm 'ratio' (ontime) as a float between 0->1
 * `pwmfreq [<frequency>]`
-  * sets or gets the pwm frequency (default 1KHz)
+  * sets or gets the pwm frequency (float, default 1KHz)
 * `servo <chip> <timer> [<servo-ratio>]`
-  * sets or gets the servo position as a 'ratio' (float between 0->1)
+  * sets or gets the servo position (ratio) as a float between 0->1
 * `servoset [<min-period> <max-period> [<interval>]]`
   * sets or gets servo minimum and maximum pulse periods, and optionally the pulse interval.
   * specified in nanoseconds; defaults to: 0.6ms / 2.3ms for the min / max, 20ms between pulses.
@@ -162,9 +162,8 @@ The daemon process runs as the root user, and is written by 'some bloke on the i
 
 ### Commandline client
 A simple example from a Raspberry Pi (2 pwm timers):
-* Also see the the shell demo [client-demo.sh](./client-demo.sh).
-
-Start a server If needed (see above, the example server here was started with the `--verbose` flag)
+* Also see the demos [client-demo.sh](./client-demo.sh) and [servo-demo.sh](./servo-demo.sh).
+* Start a server if needed (see above); the example server here was started with the `--verbose` flag.
 
 Then control the PWM timers with:
 ```console
@@ -191,7 +190,6 @@ $ pwmtimerctl states
 {'0': {0: None, 1: (0, 200000, 100000, 'normal')}}
 $ pwmtimerctl close 0 1
 pyPWMd.py: info: closed: /sys/class/pwm/pwmchip0/pwm1
-
 ```
 Run `pwmtimerctl help` to see the full command set and syntax.
 
@@ -202,11 +200,11 @@ methods:
 -------
 pypwm_client.open(chip, timer):
       Returns 'True' if the node was successfully opened, or already open
-      or an error string on failure
+      Returns an error string on failure
 
 pypwm_client.close(chip, timer):
       Returns 'True' if the close was successful or node already closed
-      or an error string on failure
+      Returns an error string on failure
 
 pypwm_client.pwm(chip, timer, ratio = None):
       Sets the PWM ontime according to `ratio` (a float between 0 and 1)
@@ -219,12 +217,12 @@ pypwm_client.pwmfreq(chip, timer, frequency = None):
       Returns the (new) default value
 
 pypwm_client.servo(chip, timer, ratio):
-      Sets the servo position ontime to `ratio`, uses the default servo timings
+      Sets the servo position between min and max according to `ratio`, uses the default servo timings
       Returns an error string if the servo was not set
 
 pypwm_client.servoset(chip, timer, min-period = None, max-period = None, Interval = None):
       Sets the default servo minimum and maximum pulse periods as required, plus pulse interval
-      Returns the (new) default values in a list, or an error string if the new values are are non-sensical
+      Returns the (new) default values, or an error string if the new values are are non-sensical
 
 pypwm_client.disable(chip, timer):
       Immediately disables the specified timer
@@ -234,7 +232,7 @@ pypwm_client.states():
       Reads the /sys/class/pwm/ tree and returns the state map as a dict
 
 pypwm_client.info():
-      Returns a list with server details
+      Returns the server details
 
 Properties:
 -----------
@@ -243,16 +241,16 @@ pypwm_client.connected
 ```
 
 ### python client install
-Create a softlink to the library in your project folder (or clone the whole repo there)
+Create a softlink to the library in your project folder (or copy/clone there)
 ```console
 $ ln -s /usr/local/lib/pyPWMd/pyPWMd.py .
 ```
 
 ### python client example
 Here is an example of using the library on my MQ-Pro (8 pwm timers):
-* Also see the demo [client-demo.py](./client-demo.py).
+* Also see the demos [client-demo.py](./client-demo.py) and [servo-demo.py](./servo-demo.py).
 ```python
-owen@iris:~/py-pwmd$ python3
+$ python3
 Python 3.12.3 (main, Sep 11 2024, 14:17:37) [GCC 13.2.0] on linux
 Type "help", "copyright", "credits" or "license" for more information.
 >>> import pyPWMd
