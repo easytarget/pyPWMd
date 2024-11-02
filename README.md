@@ -53,6 +53,8 @@ Once a node is open you can read and set properties; for each timer there are fo
   * Value is in nanoseconds and must be less than or equal to the period.
 * **polarity** : Changes the polarity of the PWM signal (read/write).
   * Value is an integer. 0 for “normal” or 1 for “inversed”.
+  * This is not mandatory, the PWM timer itself may not support it. The api does not mandate that this property should be settable; only that it is present.
+  * pyPWMd does not attempot to set the polarity, but it takes it into account when calculating duty cycles and pulses so that 'on' (output high) time is set correctly.
 
 The pyPWMd server is a front-end to the (legacy) sysFS interface; the kernel.org PWM API describes this in more detail:
 https://www.kernel.org/doc/html/latest/driver-api/pwm.html#using-pwms-with-the-sysfs-interface
