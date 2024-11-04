@@ -16,16 +16,19 @@
 chip=0
 timer=0
 
-# Open the timer
+# Open the timer as necesscary
+echo "Opening chip $chip, timer $timer"
 pwmtimerctl open $chip $timer
 
 echo "Press ctrl-c to exit."
+echo "- 'pwmtimerctl disable $chip $timer' to disable servo after exit"
+
 # A simple fader
 while true ; do
-    for power in 0.1 0.3 0.6 1 0.6 0.3 0.1 0 ; do
+    for position in 0.5 0 0.5 1 ; do
         echo -n "."
-        pwmtimerctl pwm $chip $timer $power
-        sleep 0.5
+        pwmtimerctl servo $chip $timer $position
+        sleep 1
     done
     echo
 done

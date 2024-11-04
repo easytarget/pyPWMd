@@ -4,10 +4,10 @@ from sys import exit, argv
 from atexit import register
 
 '''
-    Python PWM demo script, does a simple fader on a PWM timer
+    Python Servo demo script, does swipes left and right using a PWM timer
     requires:
         pypwm_server() running, as root,  on the default socket.
-        A led (or whatever) attached to a GPIO pin.
+        A servo attached to a GPIO pin.
         A free PWM timer mapped to the GPIO pin
         - via the Device Tree or an overlay.
 
@@ -28,10 +28,8 @@ def clean_exit(opened):
         print('Closing chip {}, timer {}'.format(chip,timer))
         pwm.close(chip, timer)
 
-# Generate a client object
-pwm = pypwm_client(verbose=True)
-
-# Bork if the server is not connected
+# Generate a client object.
+pwm = pypwm_client()
 if pwm.connected == False:
     print('No PWM server, exiting..')
     exit()
@@ -45,12 +43,11 @@ else:
     print('Using chip {}, timer {}'.format(chip,timer))
     register(clean_exit, False)
 
-# Main loop runs forever and fades timer up/down.
-power = 0
-step = 0.1
+# Main loop runs forever and swings servo left/right.
+steps = [0.5,0,0.5,1]
 while True:
-    pwm.pwm(chip, timer, power)
-    power = round(min(max(power + step, 0),1),3)
-    step = -step if power in [0,1] else step
-    print('{}'.format('.' if power != 0 else '.\n'), end='', flush=True)
-    sleep(0.2 if len(argv) == 1 else float(argv[1]))
+    for position in steps:
+        pwm.servo(chip, timer, position)
+        print('.',end='')
+        sleep(1 if len(argv) == 1 else float(argv[1]))
+    print()

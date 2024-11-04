@@ -53,39 +53,44 @@ Once a node is open you can read and set properties; for each timer there are fo
   * Value is in nanoseconds and must be less than or equal to the period.
 * **polarity** : Changes the polarity of the PWM signal (read/write).
   * Value is an integer. 0 for “normal” or 1 for “inversed”.
+  * This is not mandatory, the PWM timer itself may not support it. The api does not mandate that this property should be settable; only that it is present.
+  * pyPWMd does not attempot to set the polarity, but it takes it into account when calculating duty cycles and pulses so that 'on' (output high) time is set correctly.
 
 The pyPWMd server is a front-end to the (legacy) sysFS interface; the kernel.org PWM API describes this in more detail:
 https://www.kernel.org/doc/html/latest/driver-api/pwm.html#using-pwms-with-the-sysfs-interface
 
-There are five basic commands provided by the clients;
+All the clients provide the same set of commands;
 * `open <chip> <timer>`
 * `close <chip> <timer>`
   * Open and Close timer nodes
-* `get <chip> <timer>`
-  * Gets the timer properties
-* `set <chip> <timer> <enable> <period> <duty_cycle> <polarity>`
-  * Sets the properties of the timer
-  * Note that *enable* and *polarity* cannot be set unless the *period* is valid (non-zero)
+* `pwm <chip> <timer> [<pwm-ratio>]`
+  * sets or gets the pwm 'ratio' (ontime) as a float between 0->1
+* `pwmfreq [<frequency>]`
+  * sets or gets the pwm frequency (float, default 1KHz)
+* `servo <chip> <timer> [<servo-ratio>]`
+  * sets or gets the servo position (ratio) as a float between 0->1
+* `servoset [<min-period> <max-period> [<interval>]]`
+  * sets or gets servo minimum and maximum pulse periods, and optionally the pulse interval.
+  * specified in nanoseconds; defaults to: 0.6ms / 2.3ms for the min / max, 20ms between pulses.
+* `disable <chip> <timer>`
+  * Immediately disables the timer, useful with servos to stop jittering
 * `states`
   * Lists the *open*/*closed* state of all available PWM timers, if a timer is open it's properties are returned
-
-Additionally they have some helpers
-* `f2p` and `p2f`
-  * Converts a *frequency* & *power* (pwm ratio) pair of values to *period* and *duty_cycle*
-  * And vice versa.
 * `info`
   * Returns the *version*, *pid*, *uid*, *gid* and *sysfs root path* of the server
 
 ## Installing
 
 ### Standalone server for testing or one-off use
-Start: The following example is from a Raspberry Pi 3A with 2 pwm timers.
+Note that the server socket and directory also needs to be created and have it's permissions set.
+The following example is from a Raspberry Pi 3A with 2 pwm timers.
+
 ```console
 $ git clone https://github.com/easytarget/pyPWMd.git
 $ cd pyPWMd
 $ sudo mkdir -p /run/pwm && sudo chmod 755 /run/pwm
 $ sudo ./pyPWMd.py server --verbose &
-[1] 431460
+[1] 43146
 Starting Python PWM server v0.1
 Mon Sep 30 12:09:43 2024 :: Server init
 Mon Sep 30 12:09:43 2024 :: Scanning for pwm timers
@@ -102,8 +107,8 @@ Once the server is running you can use `pwmtimerctl` on the commandline, or `imp
 Stop: Once you are done with the server; terminate it by killing the PID
 ```console
 $ pwmtimerctl info
-['0.1', 431460, 0, 0, '/sys/class/pwm']
-$ kill 431460
+('0.1', 43146, 0, 0, '/sys/class/pwm')
+$ kill 43146
 [1]+  Terminated              sudo ./pyPWMd.py server
 # (could also do kill %1 since the server is backgrounded as #1)
 $ sudo rmdir /run/pwm
@@ -159,24 +164,34 @@ The daemon process runs as the root user, and is written by 'some bloke on the i
 
 ### Commandline client
 A simple example from a Raspberry Pi (2 pwm timers):
-* Also see the the shell demo [client-demo.sh](./client-demo.sh).
-
-Start a server If needed (see above)
+* Also see the demos [client-demo.sh](./client-demo.sh) and [servo-demo.sh](./servo-demo.sh).
+* Start a server if needed (see above); the example server here was started with the `--verbose` flag.
 
 Then control the PWM timers with:
 ```console
 $ pwmtimerctl states
 {'0': {0: None, 1: None}}
 $ pwmtimerctl open 0 1
-Mon Sep 30 12:12:22 2024 :: opened: /sys/class/pwm/pwmchip0/pwm1
+pyPWMd.py: info: opened: /sys/class/pwm/pwmchip0/pwm1
 $ pwmtimerctl states
-{'0': {0: None, 1: (0, (0, 0), 0)}}
-$ pwmtimerctl f2p 100000 0.5
-(10000, 5000)
-$ pwmtimerctl set 0 1 1 10000 5000 0
-Mon Sep 30 12:13:12 2024 :: set: /sys/class/pwm/pwmchip0/pwm1 = [1, 10000, 5000, 0]
+{'0': {0: None, 1: (0, 0, 0, 'normal')}}
+$ pwmtimerctl pwmfreq
+1000
+$ pwmtimerctl pwm 0 1 0.5
+pyPWMd.py: info: set /sys/class/pwm/pwmchip0/pwm1 = [1, 1000000, 500000, 'normal']
+$ pwmtimerctl pwmfreq 5000
+pyPWMd.py: info: pwm default frequency set to 5000.0
+5000
+$ pwmtimerctl pwm 0 1 0.5
+pyPWMd.py: info: set /sys/class/pwm/pwmchip0/pwm1 = [1, 200000, 100000, 'normal']
 $ pwmtimerctl states
-{'0': {0: None, 1: (1, (10000, 5000), 0)}}
+{'0': {0: None, 1: (1, 200000, 100000, 'normal')}}
+$ pwmtimerctl disable 0 1
+pyPWMd.py: info: disabling 0 1
+$ pwmtimerctl states
+{'0': {0: None, 1: (0, 200000, 100000, 'normal')}}
+$ pwmtimerctl close 0 1
+pyPWMd.py: info: closed: /sys/class/pwm/pwmchip0/pwm1
 ```
 Run `pwmtimerctl help` to see the full command set and syntax.
 
@@ -187,42 +202,39 @@ methods:
 -------
 pypwm_client.open(chip, timer):
       Returns 'True' if the node was successfully opened, or already open
-      or an error string on failure
+      Returns an error string on failure
 
 pypwm_client.close(chip, timer):
       Returns 'True' if the close was successful or node already closed
-      or an error string on failure
+      Returns an error string on failure
 
-pypwm_client.get(chip, timer):
-      Returns the timer properties as a tuple, or an error string
+pypwm_client.pwm(chip, timer, ratio = None):
+      Sets the PWM ontime according to `ratio` (a float between 0 and 1)
+      Uses the default frequency as defined by `pwmfreq`
+      Returns an error string if the value was not set
+      If `ratio` is None it will calculate and return the current ratio and frequency from the pin
 
-pypwm_client.set(chip, timer, enable=None, pwm=None, polarity=None):
-      'enable' is a bool, 0 or 1
-      'pwm' is a tuple:
-          pwm(period, duty_cycle)
-      'polarity' is 0 for 'normal' or 1 for 'inversed'.
-      The values are optional:
-      - If omitted the current value will be used
-      - This can cause errors, eg if 'enable' is set while 'pwm' is
-        still at it's default, unitialised, (0,0) setting
-      Returns 'True' on success, an error string on failure
+pypwm_client.pwmfreq(chip, timer, frequency = None):
+      If a frequency (float, in Hz) is supplied it is set as the default PWM frequency
+      Returns the (new) default value
+
+pypwm_client.servo(chip, timer, ratio):
+      Sets the servo position between min and max according to `ratio`, uses the default servo timings
+      Returns an error string if the servo was not set
+
+pypwm_client.servoset(chip, timer, min-period = None, max-period = None, Interval = None):
+      Sets the default servo minimum and maximum pulse periods as required, plus pulse interval
+      Returns the (new) default values, or an error string if the new values are are non-sensical
+
+pypwm_client.disable(chip, timer):
+      Immediately disables the specified timer
+      Returns 'True' if the disable was successful, or an error string on failure
 
 pypwm_client.states():
       Reads the /sys/class/pwm/ tree and returns the state map as a dict
 
-pypwm_client.f2p(freq, power):
-      'freq' is an integer
-      'power' is a float (0-1) giving the PWM 'on' time percentage
-      Returns a tuple (period, duty):
-        'period' and 'duty' are integers
-
-pypwm_client.p2f(period, duty):
-      'period' and 'duty' are integers
-      Returns a tuple (freq, power)
-        'freq' is an integer and 'power' is a float (max 3 decimals)
-
 pypwm_client.info():
-      Returns a list with server details
+      Returns the server details
 
 Properties:
 -----------
@@ -231,98 +243,127 @@ pypwm_client.connected
 ```
 
 ### python client install
-Create a softlink to the library in your project folder (or clone the whole repo there)
+Create a softlink to the library in your project folder (or copy/clone there)
 ```console
 $ ln -s /usr/local/lib/pyPWMd/pyPWMd.py .
 ```
 
 ### python client example
 Here is an example of using the library on my MQ-Pro (8 pwm timers):
-* Also see the demo [client-demo.py](./client-demo.py).
+* Also see the demos [client-demo.py](./client-demo.py) and [servo-demo.py](./servo-demo.py).
 ```python
+$ python3
 Python 3.12.3 (main, Sep 11 2024, 14:17:37) [GCC 13.2.0] on linux
 Type "help", "copyright", "credits" or "license" for more information.
 >>> import pyPWMd
->>> p = pyPWMd.pypwm_client()
->>> p.states()
+>>> pwm = pyPWMd.pypwm_client(verbose=True)
+>>> pwm.info()
+('1.0', 10352, 0, 115, '/sys/class/pwm')
+>>> pwm.states()
 {'0': {0: None, 1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None}}
->>> p.open(0,2)
+>>> pwm.open(0,2)
 True
->>> p.get(0,2)
-(0, (1000, 1000), 0)
->>> p.set(0, 2, 0, p.f2p(5000, 0.5), 0)
+>>> pwm.states()
+{'0': {0: None, 1: None, 2: (0, 0, 0, 'inversed'), 3: None, 4: None, 5: None, 6: None, 7: None}}
+>>> pwm.pwmfreq()
+1000
+>>> pwm.pwm(0, 2, 0.5)
 True
->>> p.states()
-{'0': {0: None, 1: None, 2: (0, (200000, 100000), 0), 3: None, 4: None, 5: None, 6: None, 7: None}}
->>> p.close(0,2)
+>>> pwm.pwm(0, 2)
+(0.5, 1000.0)
+>>> pwm.pwmfreq(5000)
+5000.0
+>>> pwm.pwm(0, 2, 0.25)
 True
+>>> pwm.pwm(0, 2)
+(0.25, 5000.0)
+>>> pwm.states()
+{'0': {0: None, 1: None, 2: (1, 200000, 150000, 'inversed'), 3: None, 4: None, 5: None, 6: None, 7: None}}
+>>> pwm.disable(0, 2)
+True
+>>> pwm.states()
+{'0': {0: None, 1: None, 2: (0, 200000, 150000, 'inversed'), 3: None, 4: None, 5: None, 6: None, 7: None}}
+>>> pwm.close(0, 2)
+True
+>>> pwm.states()
+{'0': {0: None, 1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None}}
 ```
 
 ## Upgrading
-todo.. easy. just cd.. then git pull, then restart service
+- Read and follow release notes (if any)
+- `cd /usr/local/lib/pyPWMd`
+- `git pull`
+- `sudo systemctl restart pyPWMd.service`
 
 -----------------------------
 # Commandline help reference
 ```console
-$ ./pyPWMd.py help
+$ pwmtimerctl help
 Usage: v1.0
-    pyPWMd.py command <options> [--verbose]
+    pwmtimerctl command <options>
     where 'command' is one of:
-        server [<logfile>]
+        server [<logfile>] [--verbose]
         states
         open <chip> <timer>
         close <chip> <timer>
-        set <chip> <timer> <enable> <period> <duty_cycle> <polarity>
-        get <chip> <timer>
+        pwm <chip> <timer> [<pwm-ratio>]
+        pwmfreq [<frequency>]
+        servo <chip> <timer> <servo-ratio>
+        servoset [<min-period> <max-period> [<interval>]]
+        disable <chip> <timer>
+        info
+
+    <chip> and <timer> are integers.
+    - PWM timers are organised by chip, then timer index on the chip.
 
     'server' starts a server on /run/pwm/pyPWMd.socket.
-    - needs to run as root, see the main documentation for more
-    - an optional logfile or log directory can be supplied
+    - needs to run as root, see the main documentation for more.
+    - an optional logfile or log directory can be supplied and
+      adding the option '--verbose' enables extended logging.
 
-    All other commands are sent to the server, all arguments are mandatory
+    All other commands are sent to the server.
 
-    <chip> and <timer> are integers
-        - PWM timers are organised by chip, then timer index on the chip
-    <enable> is a boolean, 0 or 1, output is undefined when disabled(0)
-    <period> is an integer, the total period of pwm cycle (nanoseconds)
-    <duty_cycle> is an integer, the pulse time within each cycle (nanoseconds)
-    <polarity> defines the initial state (high/low) at start of pulse
-
-    These are:
+    'states' lists the available pwm chips, timers, and their status.
+    - If a node entry is unexported it is shown as 'None'.
+    - Exported entries are a list of the current parameters;
+      enabled, period, duty_cycle, polarity. Followed by the timer's
+      node path in the /sys/class/pwm/ tree, as per kernel pwm api docs.
 
     'open' and 'close' export and unexport timer nodes.
     - To access a timer's status and settings the timer node must first
-      be exported
-    - Timers continue to run even when unexported
+      be exported.
+    - Timers continue to run even when unexported.
 
-    'states' lists the available pwm chips, timers, and their status.
-    - If a node entry is unexported it is shown as 'None'
-    - Exported entries are a list of the parameters (see 'get', below)
-      followed by the timer's node path in the /sys/class/pwm/ tree
+    'pwm' enables and sets the timer to a pwm ratio.
+    - The ratio is a float between 0 and 1 giving the 'on' time ratio.
+    - The frequency is taken from the current pwmfreq setting.
+    - If called with no ratio specified it will return the current
+      (frequency, ratio) read from the pin status.
 
-    'get' returns 'None' if the timer is not exported, otherwise it will
-    return four numeric values: <enable> <period> <duty_cycle> <polarity>
+    'pwmfreq' shows or sets the default PWM frequency in Hz.
+    - Default is 1000 (1KHz).
+    - If called with no argument it returns the current setting.
 
-    'set' will change an exported nodes settings with the supplied values.
-    - enable and polarity are boolean values, 0 or 1
-    - Attempting to set the enable or polarity states will fail unless
-      a valid period (non zero) is supplied or was previously set
-    - The duty_cycle cannot exceed the period
-    - Set operations are logged to the console, but not to disk logfiles
+    'servo' enables and sets the timer to output servo pulses.
+    - The position is a float between 0 (min) and 1 (max) positions.
 
-    'f2p' converts two arguments, a frequency + power_ratio to a
-    period + duty_cycle as used by the 'set' command above.
-    - Frequency is an interger, in Hz
-    - Power_ratio is ao float, 0-1, giving the % 'on time' for the signal.
-    - Returns the period and duty_cycle in nanoseconds
+    'servoset' shows or sets the servo timings and interval.
+    - The first two arguments are the minimum and maximum pulse width
+      times for the servo in seconds (floats).
+    - The third (optional) argument is the interval between pulses in
+      seconds (float).
+    - Default is 0.6ms and 2.3ms for minimum and maximum pulse width,
+      and 20ms for the interval. These are typical figures for small
+      hobby servo motors. Check datasheets and test for your motors as needed.
+    - If called with no argument it returns the current timings in seconds.
 
-    'p2f' is the reverse of 'f2p' above, giving a frequency + power_ratio
-    from the period + duty_cycle values returned by the 'get' or 'states' commands.
-    - Period and duration arguments are integers in nanoseconds.
-    - Returns the frequency in Hz and power_ratio as a float between 0 and 1
+    'disable' immediately disables the timer.
+    - This should be used as needed with the servo commands to stop the servo
+      after it has moved to position to avoid hunting and jittering.
+    - The kernel pwm api does not specify the output when disabled, typically
+      it defaults to high-impedance but you should test this.
 
-    Options (currently only applies to server):
-    --verbose enables logging of 'set' events
+    'info' returns a tuple with server details.
+      ('version', pid, uid, gid, '<syspath>')
 
     Homepage: https://github.com/easytarget/pyPWMd
-```
