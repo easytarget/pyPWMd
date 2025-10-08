@@ -212,6 +212,8 @@ class pypwm_server:
 
     def _pwmfreq(self, freq = None):
         if freq is not None:
+            if freq <= 0:
+                return 'error: cannot set frequency to {}'.format(freq)
             self.pfreq = freq
             if self._verbose:
                 self._log('info: pwm default frequency set to {}'.format(freq))

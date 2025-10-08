@@ -17,7 +17,7 @@ from atexit import register
      the gpio pwm chip and timer respectively
 '''
 chip = 0
-timer = 0
+timer = 1
 
 # Provide a function to be called on exit that disables the
 # timer and closes the control node if necesscary
